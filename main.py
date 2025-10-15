@@ -12,8 +12,11 @@ Usage:
 
 import argparse
 
+import arcade
+
 from physics_sim import (
     Ball,
+    DragForce,
     GravityForce,
     NumpyPhysicsEngine,
     PymunkPhysicsEngine,
@@ -29,8 +32,9 @@ def create_basic_demo(config: SimulationConfig):
             gravity=config.gravity,
             bounds=(config.sim_width, config.sim_height),
         )
-        # Add gravity force to numpy engine
+        # Add forces to numpy engine
         engine.add_force(GravityForce(config.gravity))
+        engine.add_force(DragForce())
     else:
         engine = PymunkPhysicsEngine(
             gravity=config.gravity,
@@ -50,13 +54,15 @@ def create_multi_ball_demo(config: SimulationConfig, count: int = 10):
             gravity=config.gravity,
             bounds=(config.sim_width, config.sim_height),
         )
-        # Add gravity force to numpy engine
+        # Add forces to numpy engine
         engine.add_force(GravityForce(config.gravity))
+        engine.add_force(DragForce())
     else:
         engine = PymunkPhysicsEngine(
             gravity=config.gravity,
             bounds=(config.sim_width, config.sim_height),
         )
+        engine.add_force(DragForce())
 
     for _ in range(count):
         ball = Ball.create_random((config.sim_width, config.sim_height))
@@ -80,7 +86,7 @@ Examples:
     parser.add_argument(
         "--engine",
         choices=["numpy", "pymunk"],
-        default="numpy",
+        default="pymunk",
         help="Physics engine to use (default: numpy)",
     )
 
@@ -98,24 +104,12 @@ Examples:
         help="Number of balls for 'many' demo (default: 10)",
     )
 
-    parser.add_argument(
-        "--width",
-        type=int,
-        default=1200,
-        help="Window width (default: 1200)",
-    )
-
-    parser.add_argument(
-        "--height",
-        type=int,
-        default=800,
-        help="Window height (default: 800)",
-    )
-
     args = parser.parse_args()
 
     # Create configuration
-    config = SimulationConfig.from_screen_size(args.width, args.height)
+    config = SimulationConfig.from_screen_size(
+        arcade.get_display_size()[0], arcade.get_display_size()[1]
+    )
     config.engine_type = args.engine
 
     # Create appropriate demo
@@ -134,14 +128,17 @@ Examples:
     print("===========================")
     print(f"Engine: {args.engine}")
     print(f"Demo: {args.demo}")
-    print(f"Window: {args.width}x{args.height}")
+    print(f"Window: {arcade.get_display_size()[0]}x{arcade.get_display_size()[1]}")
     print()
     print("Controls:")
     print("  F1  - Toggle debug info")
-    print("  G   - Toggle coordinate grid")
+    print("  G   - Toggle grid")
     print("  A   - Toggle add mode (click to add objects)")
     print("  TAB - Cycle object type (in add mode)")
     print("  ESC - Exit add mode / Exit simulation")
+    print()
+    print("UI Buttons:")
+    print("  Grid/Debug buttons - Toggle display options")
     print()
     print("UI Layout:")
     print("  Left Panel   - Controls and shortcuts")

@@ -14,25 +14,18 @@ class ThrustForce(Force):
 
     def should_apply_to(self, entity: Entity) -> bool:
         """Thrust applies to entities with thrust capability."""
-        return (
-            isinstance(entity, PhysicalEntity)
-            and hasattr(entity, "thrust_enabled")
-            and hasattr(entity, "thrust_vector")
-        )
+        return isinstance(entity, PhysicalEntity) and entity.thrust_enabled
 
     def apply_to(self, entity: Entity, dt: float) -> Vector2D:
         """Apply thrust force if enabled."""
         if not isinstance(entity, PhysicalEntity):
             return Vector2D(0, 0)
 
-        # Check if thrust is enabled
-        if not getattr(entity, "thrust_enabled", False):
+        # Check if thrust is enabled and get thrust vector from entity properties
+        if not entity.thrust_enabled:
             return Vector2D(0, 0)
 
-        # Get thrust vector from entity
-        thrust_vector = getattr(entity, "thrust_vector", Vector2D(0, 0))
-
-        return thrust_vector
+        return entity.thrust_vector
 
     def __repr__(self) -> str:
         return "ThrustForce()"

@@ -39,6 +39,43 @@ class PhysicalEntity(Entity):
         """Apply a force to this entity."""
         pass
 
+    @property
+    def drag_enabled(self) -> bool:
+        """Whether thrust/propulsion is currently enabled.
+
+        Subclasses with thrust capability should override this property.
+        Default is False (no thrust).
+        """
+        return False
+
+    @property
+    def drag_coefficient(self) -> float:
+        """Coefficient of drag for air resistance calculations.
+
+        Subclasses should override this property to provide entity-specific drag coefficients.
+        Default value is 0.1 for basic drag calculations.
+        """
+        return 0.1
+
+    @property
+    def thrust_enabled(self) -> bool:
+        """Whether thrust/propulsion is currently enabled.
+
+        Subclasses with thrust capability should override this property.
+        Default is False (no thrust).
+        """
+        return False
+
+    @property
+    def thrust_vector(self) -> Vector2D:
+        """Current thrust force vector.
+
+        Subclasses with thrust capability should override this property to return
+        the current thrust direction and magnitude.
+        Default is zero vector (no thrust).
+        """
+        return Vector2D(0, 0)
+
     def track_force(self, force_name: str, force_vector: Vector2D):
         """Record a force application for data collection.
 

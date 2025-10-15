@@ -60,6 +60,8 @@ class Simulator(arcade.Window):
         # Setup control panel callbacks
         self.control_panel.on_engine_change = self._on_engine_change
         self.control_panel.on_add_mode_toggle = self._on_add_mode_toggle
+        self.control_panel.on_grid_toggle = self._on_grid_toggle
+        self.control_panel.on_debug_toggle = self._on_debug_toggle
 
         # Add mode state
         self.add_mode = False
@@ -76,6 +78,13 @@ class Simulator(arcade.Window):
         """Initialize simulation state (called after window creation)."""
         # Enable control panel UI manager
         self.control_panel.enable()
+
+        # Set initial button states
+        self.control_panel.set_grid_enabled(self.renderer.show_grid)
+        self.control_panel.set_debug_enabled(self.renderer.show_debug)
+
+        # Maximize window on startup
+        self.maximize()
 
     def on_update(self, delta_time: float):
         """Update physics simulation.
@@ -101,7 +110,8 @@ class Simulator(arcade.Window):
         # Render UI panels (background)
         self.control_panel.render()
         entities = self.engine.get_entities()
-        self.inventory_panel.render(entities)
+        engine_name = self.engine.__class__.__name__.replace("PhysicsEngine", "")
+        self.inventory_panel.render(entities, self._current_fps, engine_name)
 
         # Render simulation viewport
         # Draw viewport background (white)
@@ -118,14 +128,6 @@ class Simulator(arcade.Window):
 
         # Render entities
         self.renderer.render_entities(entities)
-
-        # Render debug overlay
-        engine_name = self.engine.__class__.__name__.replace("PhysicsEngine", "")
-        self.renderer.render_debug_info(
-            self._current_fps,
-            len(entities),
-            engine_name,
-        )
 
     def on_key_press(self, key: int, modifiers: int):
         """Handle keyboard input.
@@ -251,11 +253,34 @@ class Simulator(arcade.Window):
         Args:
             engine_name: Name of the new engine ("numpy" or "pymunk")
         """
-        # TODO: Implement hot-swapping of engines
-        # For now, just update the config
+        # Update config
         self._config.engine_type = engine_name
-        print(f"Engine change requested: {engine_name}")
-        print("Note: Restart simulation to apply engine change")
+
+        # Clear all entities
+        self.engine.clear()
+
+        # Create new engine based on selected type
+        if engine_name == "numpy":
+            from physics_sim import DragForce, GravityForce, NumpyPhysicsEngine
+
+            new_engine = NumpyPhysicsEngine(
+                gravity=self._config.gravity,
+                bounds=(self._config.sim_width, self._config.sim_height),
+            )
+            new_engine.add_force(GravityForce(self._config.gravity))
+            new_engine.add_force(DragForce())
+        else:  # pymunk
+            from physics_sim import DragForce, PymunkPhysicsEngine
+
+            new_engine = PymunkPhysicsEngine(
+                gravity=self._config.gravity,
+                bounds=(self._config.sim_width, self._config.sim_height),
+            )
+            new_engine.add_force(DragForce())
+
+        # Replace the engine
+        self.engine = new_engine
+        print(f"Engine switched to: {engine_name}")
 
     def _on_add_mode_toggle(self, enabled: bool):
         """Handle add mode toggle from control panel.
@@ -264,6 +289,16 @@ class Simulator(arcade.Window):
             enabled: Whether add mode is enabled
         """
         self.add_mode = enabled
+
+    def _on_grid_toggle(self):
+        """Handle grid toggle from control panel."""
+        self.renderer.toggle_grid()
+        self.control_panel.set_grid_enabled(self.renderer.show_grid)
+
+    def _on_debug_toggle(self):
+        """Handle debug info toggle from control panel."""
+        self.renderer.toggle_debug()
+        self.control_panel.set_debug_enabled(self.renderer.show_debug)
 
     def run(self):
         """Start the simulation."""

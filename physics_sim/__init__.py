@@ -21,8 +21,8 @@ __all__: list[str] = [
 ]
 
 from physics_sim.core import (
-    Force,
     Entity,
+    Force,
     PhysicalEntity,
     PhysicsEngine,
     Renderer,
@@ -31,7 +31,12 @@ from physics_sim.core import (
 from physics_sim.engines import NumpyPhysicsEngine, PymunkPhysicsEngine
 from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
 from physics_sim.forces import DragForce, GravityForce, ThrustForce
-from physics_sim.rendering import ArcadeRenderer
 from physics_sim.simulation.config import SimulationConfig
-from physics_sim.simulation.simulator import Simulator
-from physics_sim.ui import ControlPanel, InventoryPanel
+
+try:
+    from physics_sim.rendering import ArcadeRenderer
+    from physics_sim.simulation.simulator import Simulator
+    from physics_sim.ui import ControlPanel, InventoryPanel
+except ImportError:
+    # Arcade not installed - these will be imported when needed
+    pass

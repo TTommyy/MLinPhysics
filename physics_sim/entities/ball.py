@@ -18,6 +18,7 @@ class Ball(PhysicalEntity):
         mass: float = 1.0,
         color: tuple[int, int, int] = (255, 0, 0),
         restitution: float = 1.0,
+        drag_coefficient: float = 0.1,
         entity_id: str | None = None,
     ):
         """
@@ -34,7 +35,16 @@ class Ball(PhysicalEntity):
         self.radius = radius
         self.color = color
         self.restitution = restitution
+        self._drag_coefficient = drag_coefficient
         self._acceleration = Vector2D(0, 0)
+
+    @property
+    def drag_enabled(self) -> bool:
+        return True
+
+    @property
+    def drag_coefficient(self) -> float:
+        return self._drag_coefficient
 
     def apply_force(self, force: Vector2D):
         """Apply a force using F = ma."""

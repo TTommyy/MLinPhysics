@@ -21,18 +21,16 @@ class DragForce(Force):
         self.linear = linear
 
     def should_apply_to(self, entity: Entity) -> bool:
-        """Drag applies to physical entities with drag coefficient."""
-        return isinstance(entity, PhysicalEntity) and hasattr(
-            entity, "drag_coefficient"
-        )
+        """Drag applies to all physical entities (they all have drag_coefficient property)."""
+        return isinstance(entity, PhysicalEntity) and entity.drag_enabled
 
     def apply_to(self, entity: Entity, dt: float) -> Vector2D:
         """Calculate drag force based on velocity."""
         if not isinstance(entity, PhysicalEntity):
             return Vector2D(0, 0)
 
-        # Get drag coefficient from entity, or use default
-        drag_coef = getattr(entity, "drag_coefficient", self.coefficient)
+        # Get drag coefficient from entity property
+        drag_coef = entity.drag_coefficient
 
         velocity = entity.velocity
         speed = velocity.magnitude()

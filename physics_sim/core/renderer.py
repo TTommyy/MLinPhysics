@@ -24,7 +24,7 @@ class Renderer(ABC):
         self.scale = min(screen_width / sim_width, screen_height / sim_height)
 
         self.show_debug = True
-        self.show_grid = False
+        self.show_grid = True
 
     @abstractmethod
     def physics_to_screen_x(self, x: float) -> float:

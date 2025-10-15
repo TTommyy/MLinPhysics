@@ -36,6 +36,8 @@ class ControlPanel:
         self.on_engine_change = None
         self.on_add_mode_toggle = None
         self.on_object_type_change = None
+        self.on_grid_toggle = None
+        self.on_debug_toggle = None
 
         self._setup_ui()
 
@@ -100,6 +102,30 @@ class ControlPanel:
         self.object_type_button.on_click = self._cycle_object_type
         v_box.add(self.object_type_button)
 
+        # Display controls section
+        display_label = arcade.gui.UILabel(
+            text="Display Options",
+            font_size=10,
+            text_color=arcade.color.DARK_GRAY,
+        )
+        v_box.add(display_label)
+
+        self.grid_button = arcade.gui.UIFlatButton(
+            text="Grid: ON",
+            width=220,
+            height=35,
+        )
+        self.grid_button.on_click = self._toggle_grid
+        v_box.add(self.grid_button)
+
+        self.debug_button = arcade.gui.UIFlatButton(
+            text="Debug: ON",
+            width=220,
+            height=35,
+        )
+        self.debug_button.on_click = self._toggle_debug
+        v_box.add(self.debug_button)
+
         # Spacer
         v_box.add(arcade.gui.UISpace(height=10))
 
@@ -124,8 +150,6 @@ class ControlPanel:
 
         shortcuts = [
             "A - Toggle add mode",
-            "G - Toggle grid",
-            "F1 - Toggle debug info",
             "TAB - Switch object type",
             "ESC - Exit mode/quit",
         ]
@@ -175,6 +199,16 @@ class ControlPanel:
         if self.on_object_type_change:
             self.on_object_type_change(self.selected_object_type)
 
+    def _toggle_grid(self, event):
+        """Toggle grid display."""
+        if self.on_grid_toggle:
+            self.on_grid_toggle()
+
+    def _toggle_debug(self, event):
+        """Toggle debug info display."""
+        if self.on_debug_toggle:
+            self.on_debug_toggle()
+
     def _update_status(self):
         """Update status label based on current mode."""
         if self.add_mode:
@@ -194,6 +228,22 @@ class ControlPanel:
             self.add_mode = enabled
             self.add_mode_button.text = f"Add Mode: {'ON' if self.add_mode else 'OFF'}"
             self._update_status()
+
+    def set_grid_enabled(self, enabled: bool):
+        """Set grid display state.
+
+        Args:
+            enabled: Whether grid is enabled
+        """
+        self.grid_button.text = f"Grid: {'ON' if enabled else 'OFF'}"
+
+    def set_debug_enabled(self, enabled: bool):
+        """Set debug info display state.
+
+        Args:
+            enabled: Whether debug info is enabled
+        """
+        self.debug_button.text = f"Debug: {'ON' if enabled else 'OFF'}"
 
     def render(self):
         """Render the control panel with background."""

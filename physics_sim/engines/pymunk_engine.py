@@ -23,8 +23,9 @@ class PymunkPhysicsEngine(PhysicsEngine):
         super().__init__(gravity, bounds)
 
         # Create pymunk space
-        self.space = pymunk.Space()
+        self.space = pymunk.Space(threaded=True)
         self.space.gravity = (gravity.x, gravity.y)
+        self.space.threads = 10
 
         # Track entity mappings
         self._entities: dict[str, Entity] = {}
@@ -102,7 +103,13 @@ class PymunkPhysicsEngine(PhysicsEngine):
         self._entities.clear()
 
     def step(self, dt: float) -> None:
-        """Advance simulation using pymunk's solver."""
+        """Advance simulation using pymunk's solver with custom forces."""
+        # Apply custom forces to entities
+        for entity_id, entity in self._entities.items():
+            if isinstance(entity, Ball) and entity_id in self._entity_bodies:
+                body = self._entity_bodies[entity_id]
+                self._apply_forces_to_ball(entity, body, dt)
+
         # Step the pymunk space
         self.space.step(dt)
 
@@ -114,6 +121,25 @@ class PymunkPhysicsEngine(PhysicsEngine):
                 entity.position.y = body.position.y
                 entity.velocity.x = body.velocity.x
                 entity.velocity.y = body.velocity.y
+
+    def _apply_forces_to_ball(self, ball: Ball, body: pymunk.Body, dt: float) -> None:
+        """Apply custom forces to a ball in the pymunk simulation."""
+        ball.reset_acceleration()
+        ball.clear_force_tracking()
+
+        # Apply all registered forces
+        for force in self.forces:
+            if force.should_apply_to(ball):
+                force_vector = force.apply_to(ball, dt)
+                ball.apply_force(force_vector)
+                ball.track_force(force.name, force_vector)
+
+        # Apply the accumulated acceleration to the pymunk body
+        acceleration = ball.get_acceleration()
+        if acceleration.magnitude() > 0.001:  # Only apply if significant
+            # Apply force as impulse: F * dt = m * dv, so dv = (F * dt) / m
+            impulse = acceleration * dt * ball.mass
+            body.apply_impulse_at_local_point((impulse.x, impulse.y), (0, 0))
 
     # TODO: Add collision handlers for custom collision behavior
     #

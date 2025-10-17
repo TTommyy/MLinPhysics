@@ -62,16 +62,6 @@ class Renderer(ABC):
         pass
 
     @abstractmethod
-    def render_debug_info(
-        self,
-        fps: float,
-        entity_count: int,
-        engine_name: str,
-    ) -> None:
-        """Render debug information overlay."""
-        pass
-
-    @abstractmethod
     def render_ui(self, ui_elements: list) -> None:
         """Render UI elements (panels, buttons, etc.)."""
         pass

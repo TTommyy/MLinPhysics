@@ -16,9 +16,10 @@ class SimulationConfig:
     screen_height: int = 800
     window_title: str = "Physics Simulation"
 
-    # Panel dimensions
-    control_panel_width: int = 250
-    inventory_panel_width: int = 350
+    # Layout percentages
+    control_panel_width_pct: float = 0.25
+    inventory_panel_width_pct: float = 0.25
+    viewport_height_pct: float = 0.50
 
     # Physics settings
     sim_width: float = 12
@@ -32,25 +33,26 @@ class SimulationConfig:
     # Debug settings
     show_debug_info: bool = True
 
-    @property
-    def viewport_x(self) -> int:
-        """X coordinate where viewport starts (after left panel)."""
-        return self.control_panel_width
+    def create_layout_manager(self):
+        """Create a LayoutManager instance from this config.
 
-    @property
-    def viewport_width(self) -> int:
-        """Width of the simulation viewport."""
-        return self.screen_width - self.control_panel_width - self.inventory_panel_width
+        Returns:
+            LayoutManager configured with screen dimensions and percentages
+        """
+        from physics_sim.ui.layout import LayoutManager
 
-    @property
-    def viewport_height(self) -> int:
-        """Height of the simulation viewport."""
-        return self.screen_height
+        return LayoutManager(
+            screen_width=self.screen_width,
+            screen_height=self.screen_height,
+            control_panel_width_pct=self.control_panel_width_pct,
+            inventory_panel_width_pct=self.inventory_panel_width_pct,
+            viewport_height_pct=self.viewport_height_pct,
+        )
 
     @classmethod
     def from_screen_size(cls, width: int, height: int) -> "SimulationConfig":
         """Create config maintaining aspect ratio from screen dimensions."""
-        sim_min_width = 20.0
+        sim_min_width = 10.0
         aspect_ratio = width / height
         sim_width = sim_min_width
         sim_height = sim_min_width / aspect_ratio

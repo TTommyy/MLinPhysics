@@ -7,6 +7,7 @@ from physics_sim.ui import (
     ControlPanel,
     EntitySelector,
     InventoryPanel,
+    PlaceholderPanel,
 )
 
 
@@ -41,23 +42,26 @@ class Simulator(arcade.Window):
         self._config = config
         self.engine = engine
 
-        # Create renderer with viewport awareness
+        # Create layout manager
+        self.layout = config.create_layout_manager()
+
+        # Create renderer with viewport region
+        viewport = self.layout.viewport
         self.renderer = ArcadeRenderer(
-            config.screen_width,
-            config.screen_height,
-            config.sim_width,
-            config.sim_height,
-            viewport_x=config.viewport_x,
-            viewport_width=config.viewport_width,
+            region=viewport, sim_width=config.sim_width, sim_height=config.sim_height
         )
         self.renderer.show_debug = config.show_debug_info
 
-        # Create UI components
-        self.control_panel = ControlPanel(
-            config.screen_width, config.screen_height, config.control_panel_width
+        # Create UI components with layout regions
+        self.control_panel = ControlPanel(self.layout.control_panel)
+        self.inventory_panel = InventoryPanel(self.layout.inventory_panel)
+
+        # Create placeholder panels
+        self.top_placeholder = PlaceholderPanel(
+            self.layout.top_placeholder, "Top Panel (Future)", (220, 220, 240)
         )
-        self.inventory_panel = InventoryPanel(
-            config.screen_width, config.screen_height, config.inventory_panel_width
+        self.bottom_placeholder = PlaceholderPanel(
+            self.layout.bottom_placeholder, "Bottom Panel (Future)", (220, 220, 240)
         )
 
         # Entity selection and editing
@@ -125,19 +129,18 @@ class Simulator(arcade.Window):
         """Render the simulation."""
         self.clear()
 
-        # Render UI panels (background)
-        self.control_panel.render()
-        entities = self.engine.get_entities()
-        engine_name = self.engine.__class__.__name__.replace("PhysicsEngine", "")
-        self.inventory_panel.render(entities, self._current_fps, engine_name)
+        # Render placeholder panels
+        self.top_placeholder.render()
+        self.bottom_placeholder.render()
 
         # Render simulation viewport
         # Draw viewport background (white)
+        viewport = self.layout.viewport
         arcade.draw_lrbt_rectangle_filled(
-            self._config.viewport_x,
-            self._config.viewport_x + self._config.viewport_width,
-            0,
-            self.height,
+            viewport.left,
+            viewport.right,
+            viewport.bottom,
+            viewport.top,
             arcade.color.WHITE,
         )
 
@@ -145,7 +148,13 @@ class Simulator(arcade.Window):
         self.renderer.render_grid()
 
         # Render entities
+        entities = self.engine.get_entities()
         self.renderer.render_entities(entities)
+
+        # Render UI panels (on top)
+        self.control_panel.render()
+        engine_name = self.engine.__class__.__name__.replace("PhysicsEngine", "")
+        self.inventory_panel.render(entities, self._current_fps, engine_name)
 
     def on_key_press(self, key: int, modifiers: int):
         """Handle keyboard input.

@@ -1,6 +1,6 @@
 import arcade
 
-from physics_sim.core import Entity, Renderer
+from physics_sim.core import Entity, LayoutRegion, Renderer
 
 
 class ArcadeRenderer(Renderer):
@@ -13,56 +13,39 @@ class ArcadeRenderer(Renderer):
     - Grid rendering with coordinate labels
     """
 
-    def __init__(
-        self,
-        screen_width: int,
-        screen_height: int,
-        sim_width: float,
-        sim_height: float,
-        viewport_x: int = 0,
-        viewport_width: int | None = None,
-        margin_top: int = 100,
-        margin_bottom: int = 100,
-    ):
+    def __init__(self, region: LayoutRegion, sim_width: float, sim_height: float):
         """
         Args:
-            screen_width: Window width in pixels
-            screen_height: Window height in pixels
+            region: Viewport region defining screen bounds
             sim_width: Simulation width in physics units
             sim_height: Simulation height in physics units
-            viewport_x: X offset where viewport starts (default 0)
-            viewport_width: Width of viewport in pixels (default screen_width)
-            margin_top: Margin from top of screen in pixels
-            margin_bottom: Margin from bottom of screen in pixels
         """
-        super().__init__(screen_width, screen_height, sim_width, sim_height)
-        self.viewport_x = viewport_x
-        self.viewport_width = viewport_width or screen_width
-        self.margin_top = margin_top
-        self.margin_bottom = margin_bottom
-        # Recalculate scale based on viewport width instead of screen width
-        self.scale = self.viewport_width / sim_width
+        super().__init__(region.width, region.height, sim_width, sim_height)
+        self.region = region
+        # Recalculate scale based on region dimensions
+        self.scale = min(region.width / sim_width, region.height / sim_height)
+        self.sim_width = sim_width
+        self.sim_height = sim_height
         self._paused = False
 
     def physics_to_screen_x(self, x: float) -> float:
         """Convert physics X coordinate to screen coordinate."""
-        return self.viewport_x + (x * self.scale)
+        return self.region.left + (x * self.scale)
 
     def physics_to_screen_y(self, y: float) -> float:
         """Convert physics Y coordinate to screen coordinate.
 
-        Note: Flips Y axis since physics has origin at bottom-left
-        and screen has origin at top-left.
+        Physics origin is at region.bottom (bottom of viewport), Y increases upward.
         """
-        return (self.screen_height - self.margin_bottom) - (y * self.scale)
+        return self.region.bottom + (y * self.scale)
 
     def screen_to_physics_x(self, x: float) -> float:
         """Convert screen X coordinate to physics coordinate."""
-        return (x - self.viewport_x) / self.scale
+        return (x - self.region.left) / self.scale
 
     def screen_to_physics_y(self, y: float) -> float:
         """Convert screen Y coordinate to physics coordinate."""
-        return ((self.screen_height - self.margin_bottom) - y) / self.scale
+        return (y - self.region.bottom) / self.scale
 
     def clear(self) -> None:
         """Clear the screen."""
@@ -147,35 +130,6 @@ class ArcadeRenderer(Renderer):
             left, right, bottom, top, arcade.color.BLACK, 2
         )
 
-    def render_debug_info(
-        self,
-        fps: float,
-        entity_count: int,
-        engine_name: str,
-    ) -> None:
-        """Render debug information overlay."""
-        if not self.show_debug:
-            return
-
-        y_offset = self.screen_height - 20
-
-        debug_texts = [
-            f"FPS: {fps:.1f}",
-            f"Engine: {engine_name}",
-            f"Entities: {entity_count}",
-        ]
-
-        for text in debug_texts:
-            arcade.draw_text(
-                text,
-                self.viewport_x + 10,
-                y_offset,
-                arcade.color.BLACK,
-                14,
-                bold=True,
-            )
-            y_offset -= 20
-
     def render_grid(self, grid_spacing: float = 1.0) -> None:
         """Render coordinate grid with labels at fixed spacing."""
         if not self.show_grid:
@@ -185,44 +139,57 @@ class ArcadeRenderer(Renderer):
         grid_color = (200, 200, 200)
         label_color = arcade.color.DARK_GRAY
 
-        # Viewport boundaries
-        viewport_right = self.viewport_x + self.viewport_width
-
-        # Draw vertical lines
+        # Draw vertical lines only within viewport
         x = 0.0
         while x <= self.sim_width:
             screen_x = self.physics_to_screen_x(x)
-            arcade.draw_line(screen_x, 0, screen_x, self.screen_height, grid_color, 1)
-
-            # Add label at bottom
-            if x > 0:  # Skip zero, will label on axis
-                arcade.draw_text(
-                    f"{x:.1f}",
-                    screen_x - 10,
-                    5,
-                    label_color,
-                    10,
+            # Only draw if within viewport
+            if self.region.left <= screen_x <= self.region.right:
+                arcade.draw_line(
+                    screen_x,
+                    self.region.bottom,
+                    screen_x,
+                    self.region.top,
+                    grid_color,
+                    2,
                 )
+
+                # Add label at bottom
+                if x > 0:  # Skip zero, will label on axis
+                    arcade.draw_text(
+                        f"{x:.1f}",
+                        screen_x - 10,
+                        self.region.bottom + 5,
+                        label_color,
+                        10,
+                    )
 
             x += grid_spacing
 
-        # Draw horizontal lines
+        # Draw horizontal lines only within viewport
         y = 0.0
         while y <= self.sim_height:
             screen_y = self.physics_to_screen_y(y)
-            arcade.draw_line(
-                self.viewport_x, screen_y, viewport_right, screen_y, grid_color, 1
-            )
-
-            # Add label at left
-            if y > 0:  # Skip zero, will label on axis
-                arcade.draw_text(
-                    f"{y:.1f}",
-                    self.viewport_x + 5,
-                    screen_y - 10,
-                    label_color,
-                    10,
+            # Only draw if within viewport
+            if self.region.bottom <= screen_y <= self.region.top:
+                arcade.draw_line(
+                    self.region.left,
+                    screen_y,
+                    self.region.right,
+                    screen_y,
+                    grid_color,
+                    2,
                 )
+
+                # Add label at left
+                if y > 0:  # Skip zero, will label on axis
+                    arcade.draw_text(
+                        f"{y:.1f}",
+                        self.region.left + 5,
+                        screen_y - 10,
+                        label_color,
+                        10,
+                    )
 
             y += grid_spacing
 
@@ -233,12 +200,22 @@ class ArcadeRenderer(Renderer):
 
         # Y-axis
         arcade.draw_line(
-            screen_x_axis, 0, screen_x_axis, self.screen_height, axis_color, 2
+            screen_x_axis,
+            self.region.bottom,
+            screen_x_axis,
+            self.region.top,
+            axis_color,
+            4,
         )
 
         # X-axis
         arcade.draw_line(
-            self.viewport_x, screen_y_axis, viewport_right, screen_y_axis, axis_color, 2
+            self.region.left,
+            screen_y_axis,
+            self.region.right,
+            screen_y_axis,
+            axis_color,
+            4,
         )
 
         # Origin label
@@ -246,6 +223,30 @@ class ArcadeRenderer(Renderer):
             "0,0",
             screen_x_axis + 5,
             screen_y_axis - 15,
+            label_color,
+            10,
+            bold=True,
+        )
+
+        # Max value labels
+        screen_x_max = self.physics_to_screen_x(self.sim_width)
+        screen_y_max = self.physics_to_screen_y(self.sim_height)
+
+        # Maximum X value label (on x-axis)
+        arcade.draw_text(
+            f"{self.sim_width:.1f}",
+            screen_x_max - 20,
+            screen_y_axis - 15,
+            label_color,
+            10,
+            bold=True,
+        )
+
+        # Maximum Y value label (on y-axis)
+        arcade.draw_text(
+            f"{self.sim_height:.1f}",
+            screen_x_axis + 5,
+            screen_y_max + 5,
             label_color,
             10,
             bold=True,

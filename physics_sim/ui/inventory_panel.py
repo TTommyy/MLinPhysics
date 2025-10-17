@@ -1,7 +1,7 @@
 import arcade
 import arcade.gui
 
-from physics_sim.core import PhysicalEntity
+from physics_sim.core import LayoutRegion, PhysicalEntity
 
 
 class InventoryPanel:
@@ -13,17 +13,16 @@ class InventoryPanel:
     - Active forces and their magnitudes
     """
 
-    def __init__(self, screen_width: int, screen_height: int, panel_width: int = 350):
+    def __init__(self, region: LayoutRegion):
         """
         Args:
-            screen_width: Window width in pixels
-            screen_height: Window height in pixels
-            panel_width: Width of the inventory panel
+            region: Layout region defining position and size
         """
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.panel_width = panel_width
-        self.panel_x = screen_width - panel_width
+        self.region = region
+        self.screen_width = region.right
+        self.screen_height = region.top
+        self.panel_width = region.width
+        self.panel_x = region.x
 
         # Scroll offset
         self.scroll_offset = 0
@@ -90,12 +89,21 @@ class InventoryPanel:
         """
         # Draw panel background
         arcade.draw_lrbt_rectangle_filled(
-            self.panel_x, self.screen_width, 0, self.screen_height, (245, 245, 245)
+            self.region.left,
+            self.region.right,
+            self.region.bottom,
+            self.region.top,
+            (245, 245, 245),
         )
 
         # Draw left border
         arcade.draw_line(
-            self.panel_x, 0, self.panel_x, self.screen_height, arcade.color.GRAY, 2
+            self.region.left,
+            self.region.bottom,
+            self.region.left,
+            self.region.top,
+            arcade.color.GRAY,
+            2,
         )
 
         # Update and draw debug info section

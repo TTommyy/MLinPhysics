@@ -1,6 +1,8 @@
 import arcade
 import arcade.gui
 
+from physics_sim.core import LayoutRegion
+
 
 class ControlPanel:
     """Fixed left control panel with GUI widgets for engine selection and object placement.
@@ -13,16 +15,14 @@ class ControlPanel:
     - Keyboard shortcuts reference
     """
 
-    def __init__(self, screen_width: int, screen_height: int, panel_width: int = 250):
+    def __init__(self, region: LayoutRegion):
         """
         Args:
-            screen_width: Window width in pixels
-            screen_height: Window height in pixels
-            panel_width: Width of the control panel
+            region: Layout region defining position and size
         """
-        self.screen_width = screen_width
-        self.screen_height = screen_height
-        self.panel_width = panel_width
+        self.region = region
+        self.screen_width = region.right
+        self.screen_height = region.top
 
         # UI Manager
         self.ui_manager = arcade.gui.UIManager()
@@ -515,15 +515,19 @@ class ControlPanel:
         """Render the control panel with background."""
         # Draw panel background
         arcade.draw_lrbt_rectangle_filled(
-            0, self.panel_width, 0, self.screen_height, (245, 245, 245)
+            self.region.left,
+            self.region.right,
+            self.region.bottom,
+            self.region.top,
+            (245, 245, 245),
         )
 
         # Draw right border
         arcade.draw_line(
-            self.panel_width,
-            0,
-            self.panel_width,
-            self.screen_height,
+            self.region.right,
+            self.region.bottom,
+            self.region.right,
+            self.region.top,
             arcade.color.GRAY,
             2,
         )
@@ -535,8 +539,8 @@ class ControlPanel:
         if self.editor_visible:
             # Draw editor background box using draw_lrbt_rectangle_filled
             arcade.draw_lrbt_rectangle_filled(
-                10,  # left
-                self.panel_width - 10,  # right
+                self.region.left + 10,  # left
+                self.region.right - 10,  # right
                 50,  # bottom
                 350,  # top
                 (230, 230, 240),  # color

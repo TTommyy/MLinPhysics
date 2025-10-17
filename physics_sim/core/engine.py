@@ -78,3 +78,16 @@ class PhysicsEngine(ABC):
     def is_paused(self) -> bool:
         """Check if physics simulation is paused."""
         pass
+
+    @abstractmethod
+    def get_supported_entity_types(self) -> list[type]:
+        """Get list of entity classes supported by this engine.
+
+        Returns:
+            List of entity classes (e.g., [Ball, Obstacle])
+        """
+        pass
+
+    @abstractmethod
+    def get_entities_types(self) -> list[Entity]:
+        pass

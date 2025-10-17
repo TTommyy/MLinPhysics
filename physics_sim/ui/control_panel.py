@@ -26,12 +26,24 @@ class ControlPanel:
 
         # UI Manager
         self.ui_manager = arcade.gui.UIManager()
+        self.editor_ui_manager = arcade.gui.UIManager()
 
         # State
         self.selected_engine = "numpy"
         self.add_mode = False
-        self.selected_object_type = "Ball"
+        self.available_entity_types: list[type] = []
+        self.selected_entity_type_index = 0
         self.is_paused: bool = False
+        self.entity_selected: bool = False
+
+        # Entity editor state
+        self.editor_visible = False
+        self.editor_entity = None
+        self.editor_entity_class = None
+        self.editor_parameters = {}
+        self.editor_input_fields: dict[str, arcade.gui.UIInputText] = {}
+        self.editor_color_buttons: dict[str, arcade.gui.UIFlatButton] = {}
+        self.editor_current_colors: dict[str, tuple[int, int, int]] = {}
 
         # Callbacks
         self.on_engine_change = None
@@ -40,6 +52,8 @@ class ControlPanel:
         self.on_grid_toggle = None
         self.on_debug_toggle = None
         self.on_pause_toggle = None
+        self.on_entity_save = None
+        self.on_entity_delete = None
 
         self._setup_ui()
 
@@ -97,7 +111,7 @@ class ControlPanel:
         v_box.add(self.add_mode_button)
 
         self.object_type_button = arcade.gui.UIFlatButton(
-            text=f"Type: {self.selected_object_type}",
+            text="Type: (no engine)",
             width=220,
             height=35,
         )
@@ -136,8 +150,22 @@ class ControlPanel:
         self.pause_button.on_click = self._toggle_pause
         v_box.add(self.pause_button)
 
+        self.edit_button = arcade.gui.UIFlatButton(
+            text="Edit Entity",
+            width=220,
+            height=35,
+        )
+        self.edit_button.on_click = self._on_edit_entity_button
+        self.edit_button.disabled = True
+        v_box.add(self.edit_button)
+
         # Spacer
         v_box.add(arcade.gui.UISpace(height=10))
+
+        # Entity editor section (initially hidden)
+        self.editor_section = arcade.gui.UIBoxLayout(space_between=6, vertical=True)
+        self.editor_anchor = v_box  # Store reference to parent
+        # Editor will be added dynamically
 
         # Status indicator
         self.status_label = arcade.gui.UILabel(
@@ -149,29 +177,6 @@ class ControlPanel:
 
         # Spacer
         v_box.add(arcade.gui.UISpace(height=15))
-
-        # Keyboard shortcuts
-        shortcuts_title = arcade.gui.UILabel(
-            text="Keyboard Shortcuts",
-            font_size=10,
-            text_color=arcade.color.DARK_GRAY,
-        )
-        v_box.add(shortcuts_title)
-
-        shortcuts = [
-            "A - Toggle add mode",
-            "TAB - Switch object type",
-            "SPACE - Pause",
-            "ESC - Exit mode/quit",
-        ]
-
-        for shortcut in shortcuts:
-            label = arcade.gui.UILabel(
-                text=shortcut,
-                font_size=9,
-                text_color=arcade.color.BLACK,
-            )
-            v_box.add(label)
 
         # Create anchor and add to UI manager
         anchor = arcade.gui.UIAnchorLayout()
@@ -201,14 +206,18 @@ class ControlPanel:
             self.on_add_mode_toggle(self.add_mode)
 
     def _cycle_object_type(self, event):
-        """Cycle through available object types."""
-        types = ["Ball", "Obstacle"]
-        current_idx = types.index(self.selected_object_type)
-        self.selected_object_type = types[(current_idx + 1) % len(types)]
-        self.object_type_button.text = f"Type: {self.selected_object_type}"
+        """Cycle through available entity types from engine."""
+        if not self.available_entity_types:
+            return
+
+        self.selected_entity_type_index = (self.selected_entity_type_index + 1) % len(
+            self.available_entity_types
+        )
+        entity_class = self.available_entity_types[self.selected_entity_type_index]
+        self.object_type_button.text = f"Type: {entity_class.__name__}"
         self._update_status()
         if self.on_object_type_change:
-            self.on_object_type_change(self.selected_object_type)
+            self.on_object_type_change(entity_class)
 
     def _toggle_grid(self, event):
         """Toggle grid display."""
@@ -227,10 +236,21 @@ class ControlPanel:
         if self.on_pause_toggle:
             self.on_pause_toggle()
 
+    def _on_edit_entity_button(self, event):
+        """Handle edit entity button click."""
+        if self.on_edit_entity:
+            self.on_edit_entity()
+
     def _update_status(self):
         """Update status label based on current mode."""
         if self.add_mode:
-            self.status_label.text = f"● Adding {self.selected_object_type}"
+            if self.available_entity_types:
+                entity_name = self.available_entity_types[
+                    self.selected_entity_type_index
+                ].__name__
+                self.status_label.text = f"● Adding {entity_name}"
+            else:
+                self.status_label.text = "● Adding (no types)"
             self.status_label.text_color = arcade.color.ORANGE
         else:
             self.status_label.text = "● Normal"
@@ -272,6 +292,225 @@ class ControlPanel:
         self.is_paused = enabled
         self.pause_button.text = f"Pause: {'ON' if enabled else 'OFF'}"
 
+    def set_entity_selected(self, selected: bool, entity_name: str = "Entity"):
+        """Set entity selection state and update edit button.
+
+        Args:
+            selected: Whether an entity is selected
+            entity_name: Name of the selected entity (for display)
+        """
+        self.entity_selected = selected
+        self.edit_button.disabled = not (selected and self.is_paused)
+        if selected:
+            self.edit_button.text = f"Edit {entity_name}"
+        else:
+            self.edit_button.text = "Edit Entity"
+            self.edit_button.disabled = True
+
+    def update_edit_button_availability(self):
+        """Update edit button availability based on pause and selection state."""
+        self.edit_button.disabled = not (self.entity_selected and self.is_paused)
+
+    def set_available_entity_types(self, entity_types: list[type]):
+        """Set available entity types from the physics engine.
+
+        Args:
+            entity_types: List of entity classes supported by the engine
+        """
+        self.available_entity_types = entity_types
+        self.selected_entity_type_index = 0
+        if entity_types:
+            self.object_type_button.text = f"Type: {entity_types[0].__name__}"
+        else:
+            self.object_type_button.text = "Type: (no types)"
+        self._update_status()
+
+    def get_selected_entity_type(self) -> type | None:
+        """Get currently selected entity type.
+
+        Returns:
+            Selected entity class or None if no types available
+        """
+        if self.available_entity_types:
+            return self.available_entity_types[self.selected_entity_type_index]
+        return None
+
+    def show_entity_editor(
+        self, entity_class: type | None = None, entity_instance=None
+    ):
+        """Show entity editor for creating or editing an entity.
+
+        Args:
+            entity_class: Entity class for creation
+            entity_instance: Entity instance for editing
+        """
+        self.editor_visible = True
+        self.editor_entity = entity_instance
+        self.editor_entity_class = entity_class
+
+        # Get parameters
+        if entity_instance:
+            self.editor_parameters = entity_instance.get_settable_parameters()
+            mode = "Edit"
+            entity_name = entity_instance.__class__.__name__
+        elif entity_class:
+            from physics_sim.core import Vector2D
+
+            temp = entity_class(position=Vector2D(0, 0), velocity=Vector2D(0, 0))
+            self.editor_parameters = temp.get_settable_parameters()
+            mode = "Create"
+            entity_name = entity_class.__name__
+        else:
+            return
+
+        # Clear previous editor
+        self._clear_editor()
+
+        # Build new editor
+        self.editor_section = arcade.gui.UIBoxLayout(space_between=6, vertical=True)
+
+        # Title
+        title = arcade.gui.UILabel(
+            text=f"--- {mode} {entity_name} ---",
+            font_size=10,
+            bold=True,
+            text_color=arcade.color.DARK_BLUE,
+        )
+        self.editor_section.add(title)
+
+        # Parameters
+        for param_name, param_meta in self.editor_parameters.items():
+            param_type = param_meta.get("type")
+            label = param_meta.get("label", param_name)
+            default = param_meta.get("default")
+
+            if param_type == "color":
+                self._add_color_field(param_name, label, default)
+            else:
+                self._add_input_field(param_name, label, default)
+
+        # Buttons
+        button_row = arcade.gui.UIBoxLayout(space_between=5, vertical=False)
+
+        save_btn = arcade.gui.UIFlatButton(text="Save", width=65, height=28)
+        save_btn.on_click = self._on_editor_save
+        button_row.add(save_btn)
+
+        cancel_btn = arcade.gui.UIFlatButton(text="Cancel", width=65, height=28)
+        cancel_btn.on_click = self._on_editor_cancel
+        button_row.add(cancel_btn)
+
+        if entity_instance:
+            del_btn = arcade.gui.UIFlatButton(text="Del", width=45, height=28)
+            del_btn.on_click = self._on_editor_delete
+            button_row.add(del_btn)
+
+        self.editor_section.add(button_row)
+
+        # Add to editor UI manager with anchoring
+        anchor = arcade.gui.UIAnchorLayout()
+        anchor.add(
+            child=self.editor_section,
+            anchor_x="left",
+            anchor_y="bottom",
+            align_x=15,
+            align_y=50,
+        )
+        self.editor_ui_manager.add(anchor)
+        self.editor_ui_manager.enable()
+
+    def _add_input_field(self, param_name: str, label: str, default_value):
+        """Add an input field to editor section."""
+        row = arcade.gui.UIBoxLayout(space_between=4, vertical=True)
+
+        lbl = arcade.gui.UILabel(
+            text=label, font_size=8, text_color=arcade.color.DARK_GRAY
+        )
+        row.add(lbl)
+
+        inp = arcade.gui.UIInputText(text=str(default_value), width=210, height=24)
+        self.editor_input_fields[param_name] = inp
+        row.add(inp)
+
+        self.editor_section.add(row)
+
+    def _add_color_field(
+        self, param_name: str, label: str, default_value: tuple[int, int, int]
+    ):
+        """Add a color field to editor section."""
+        row = arcade.gui.UIBoxLayout(space_between=4, vertical=True)
+
+        lbl = arcade.gui.UILabel(
+            text=label, font_size=8, text_color=arcade.color.DARK_GRAY
+        )
+        row.add(lbl)
+
+        self.editor_current_colors[param_name] = default_value
+        btn = arcade.gui.UIFlatButton(
+            text=f"RGB({default_value[0]},{default_value[1]},{default_value[2]})",
+            width=210,
+            height=24,
+        )
+        btn.on_click = lambda e, n=param_name: self._on_color_click(e, n)
+        self.editor_color_buttons[param_name] = btn
+        row.add(btn)
+
+        self.editor_section.add(row)
+
+    def _on_color_click(self, event, param_name: str):
+        """Cycle through colors."""
+        r, g, b = self.editor_current_colors[param_name]
+        r = (r + 50) % 256
+        self.editor_current_colors[param_name] = (r, g, b)
+        self.editor_color_buttons[param_name].text = f"RGB({r},{g},{b})"
+
+    def _on_editor_save(self, event):
+        """Handle save button in editor."""
+        try:
+            data: dict[str, object] = {}
+            for name, field in self.editor_input_fields.items():
+                meta = self.editor_parameters[name]
+                typ = meta.get("type")
+                if typ == "float":
+                    data[name] = float(field.text)
+                elif typ == "int":
+                    data[name] = int(field.text)
+                else:
+                    data[name] = field.text
+            for name, color in self.editor_current_colors.items():
+                data[name] = color
+
+            if self.on_entity_save:
+                # Callback receives: (data, entity_instance, entity_class)
+                self.on_entity_save(data, self.editor_entity, self.editor_entity_class)
+            self.hide_entity_editor()
+        except ValueError as e:
+            print(f"Invalid input: {e}")
+
+    def _on_editor_delete(self, event):
+        """Handle delete button in editor."""
+        if self.on_entity_delete:
+            self.on_entity_delete(self.editor_entity)
+        self.hide_entity_editor()
+
+    def _on_editor_cancel(self, event):
+        """Handle cancel button in editor."""
+        self.hide_entity_editor()
+
+    def hide_entity_editor(self):
+        """Hide the entity editor."""
+        self.editor_visible = False
+        self.editor_ui_manager.disable()
+        self._clear_editor()
+
+    def _clear_editor(self):
+        """Clear editor fields."""
+        self.editor_input_fields.clear()
+        self.editor_color_buttons.clear()
+        self.editor_current_colors.clear()
+        self.editor_section = arcade.gui.UIBoxLayout(space_between=6, vertical=True)
+        self.editor_ui_manager.clear()
+
     def render(self):
         """Render the control panel with background."""
         # Draw panel background
@@ -291,6 +530,19 @@ class ControlPanel:
 
         # Draw UI widgets
         self.ui_manager.draw()
+
+        # Draw entity editor if visible
+        if self.editor_visible:
+            # Draw editor background box using draw_lrbt_rectangle_filled
+            arcade.draw_lrbt_rectangle_filled(
+                10,  # left
+                self.panel_width - 10,  # right
+                50,  # bottom
+                350,  # top
+                (230, 230, 240),  # color
+            )
+            # Draw editor UI
+            self.editor_ui_manager.draw()
 
     def enable(self):
         """Enable the UI manager."""

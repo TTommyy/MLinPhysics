@@ -1,10 +1,13 @@
 import arcade
 
 from physics_sim.core import PhysicsEngine, Vector2D
-from physics_sim.entities import Ball, RectangleObstacle
 from physics_sim.rendering import ArcadeRenderer
 from physics_sim.simulation.config import SimulationConfig
-from physics_sim.ui import ControlPanel, InventoryPanel
+from physics_sim.ui import (
+    ControlPanel,
+    EntitySelector,
+    InventoryPanel,
+)
 
 
 class Simulator(arcade.Window):
@@ -57,16 +60,21 @@ class Simulator(arcade.Window):
             config.screen_width, config.screen_height, config.inventory_panel_width
         )
 
+        # Entity selection and editing
+        self.entity_selector = EntitySelector()
+
         # Setup control panel callbacks
         self.control_panel.on_engine_change = self._on_engine_change
         self.control_panel.on_add_mode_toggle = self._on_add_mode_toggle
         self.control_panel.on_grid_toggle = self._on_grid_toggle
         self.control_panel.on_debug_toggle = self._on_debug_toggle
         self.control_panel.on_pause_toggle = self._on_pause_toggle
+        self.control_panel.on_entity_save = self._on_entity_saved
+        self.control_panel.on_entity_delete = self._on_entity_deleted
+        self.control_panel.on_edit_entity = self._on_edit_entity_button
 
         # Add mode state
         self.add_mode = False
-        self.selected_object_type = "Ball"
 
         # Track FPS
         self._fps_timer = 0.0
@@ -83,6 +91,10 @@ class Simulator(arcade.Window):
         # Set initial button states
         self.control_panel.set_grid_enabled(self.renderer.show_grid)
         self.control_panel.set_debug_enabled(self.renderer.show_debug)
+
+        # Load available entity types from engine
+        entity_types = self.engine.get_supported_entity_types()
+        self.control_panel.set_available_entity_types(entity_types)
 
         # Maximize window on startup
         self.maximize()
@@ -165,11 +177,8 @@ class Simulator(arcade.Window):
 
         # Cycle object type with Tab (when in add mode)
         elif key == arcade.key.TAB and self.add_mode:
-            self.selected_object_type = (
-                "Obstacle" if self.selected_object_type == "Ball" else "Ball"
-            )
-            self.control_panel.selected_object_type = self.selected_object_type
-            self.control_panel._update_status()
+            # Simulate button click to cycle through entity types
+            self.control_panel._cycle_object_type(None)
 
         # TODO: Add more controls
         # - Space: Pause/resume simulation
@@ -186,33 +195,33 @@ class Simulator(arcade.Window):
             button: Mouse button that was clicked
             modifiers: Bitwise AND of modifier keys
         """
-        if not self.add_mode:
-            return
-
         if button == arcade.MOUSE_BUTTON_LEFT:
             # Convert screen coordinates to physics coordinates
             phys_x = self.renderer.screen_to_physics_x(x)
             phys_y = self.renderer.screen_to_physics_y(y)
+            click_pos = Vector2D(phys_x, phys_y)
 
-            # Create object based on selected type
-            if self.selected_object_type == "Ball":
-                ball = Ball(
-                    position=Vector2D(phys_x, phys_y),
-                    velocity=Vector2D(0, 0),
-                    radius=0.2,
-                    mass=1.0,
-                    color=(255, 0, 0),
-                )
-                self.engine.add_entity(ball)
+            # In pause mode: allow entity selection
+            if self.engine.is_paused():
+                entities = self.engine.get_entities()
+                selected = self.entity_selector.select_entity(click_pos, entities)
+                if selected:
+                    entity_type = selected.get_physics_data().get("type", "Entity")
+                    self.control_panel.set_entity_selected(True, entity_type)
+                else:
+                    self.control_panel.set_entity_selected(False)
+                return
 
-            elif self.selected_object_type == "Obstacle":
-                obstacle = RectangleObstacle(
-                    position=Vector2D(phys_x, phys_y),
-                    width=1.0,
-                    height=0.5,
-                    color=(100, 100, 100),
-                )
-                self.engine.add_entity(obstacle)
+            # In add mode: create new entity
+            if not self.add_mode:
+                return
+
+            entity_class = self.control_panel.get_selected_entity_type()
+            if entity_class:
+                # Store position for later use in _on_entity_saved
+                self._pending_entity_position = Vector2D(phys_x, phys_y)
+                # Show editor for creating new entity
+                self.control_panel.show_entity_editor(entity_class=entity_class)
 
     def on_mouse_drag(
         self, x: float, y: float, dx: float, dy: float, buttons: int, modifiers: int
@@ -286,6 +295,11 @@ class Simulator(arcade.Window):
 
         # Replace the engine
         self.engine = new_engine
+
+        # Reload entity types for new engine
+        entity_types = new_engine.get_supported_entity_types()
+        self.control_panel.set_available_entity_types(entity_types)
+
         print(f"Engine switched to: {engine_name}")
 
     def _on_add_mode_toggle(self, enabled: bool):
@@ -309,6 +323,56 @@ class Simulator(arcade.Window):
     def _on_pause_toggle(self):
         """Handle pause toggle from control panel."""
         self.pause()
+        # Clear selection and update UI when toggling pause
+        if not self.engine.is_paused():
+            self.entity_selector.clear_selection()
+            self.control_panel.set_entity_selected(False)
+
+    def _on_edit_entity_button(self):
+        """Handle edit entity button click."""
+        entity = self.entity_selector.get_selected_entity()
+        if entity:
+            self.control_panel.show_entity_editor(entity_instance=entity)
+
+    def _on_entity_saved(self, data: dict, entity_instance, entity_class: type):
+        """Handle entity save from control panel editor.
+
+        Args:
+            data: Updated parameter values
+            entity_instance: Existing entity (None for creation)
+            entity_class: Entity class (used for creation)
+        """
+        if entity_instance:
+            # Editing existing entity
+            entity_instance.update_physics_data(data)
+        else:
+            # Creating new entity - get position from pending_entity_position
+            position = getattr(self, "_pending_entity_position", Vector2D(0, 0))
+
+            # Handle velocity
+            velocity_x = data.get("velocity_x", 0.0)
+            velocity_y = data.get("velocity_y", 0.0)
+            velocity = Vector2D(velocity_x, velocity_y)
+            mass = data.get("mass", 1.0)
+
+            # Create entity
+            entity = entity_class(
+                position=position,
+                velocity=velocity,
+                mass=mass,
+            )
+
+            # Apply other parameters
+            entity.update_physics_data(data)
+
+            # Add to engine
+            self.engine.add_entity(entity)
+
+    def _on_entity_deleted(self, entity_id: str):
+        """Handle entity deletion."""
+        self.engine.remove_entity(entity_id)
+        self.entity_selector.clear_selection()
+        self.control_panel.set_entity_selected(False)
 
     def run(self):
         """Start the simulation."""

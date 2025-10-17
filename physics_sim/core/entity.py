@@ -106,3 +106,33 @@ class PhysicalEntity(Entity):
                 for name, vec in self._applied_forces
             ],
         }
+
+    @abstractmethod
+    def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
+        """Get metadata for all editable parameters.
+
+        Returns:
+            Dictionary mapping parameter names to their metadata:
+            {
+                "param_name": {
+                    "type": "float" | "int" | "color" | "bool",
+                    "default": default_value,
+                    "min": min_value (optional),
+                    "max": max_value (optional),
+                    "label": "Display Label"
+                }
+            }
+        """
+        pass
+
+    @abstractmethod
+    def update_physics_data(self, config: dict[str, Any]) -> bool:
+        """Update entity parameters from config dict.
+
+        Args:
+            config: Dictionary of parameter values to update
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        pass

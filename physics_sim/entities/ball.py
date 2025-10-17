@@ -36,11 +36,12 @@ class Ball(PhysicalEntity):
         self.color = color
         self.restitution = restitution
         self._drag_coefficient = drag_coefficient
+        self._drag_enabled = False
         self._acceleration = Vector2D(0, 0)
 
     @property
     def drag_enabled(self) -> bool:
-        return True
+        return self._drag_enabled
 
     @property
     def drag_coefficient(self) -> float:
@@ -78,6 +79,85 @@ class Ball(PhysicalEntity):
             "restitution": self.restitution,
         })
         return data
+
+    def get_config_data(self) -> dict[str, Any]:
+        data = super().get_physics_data()
+        data.update({
+            "radius": self.radius,
+            "acceleration": self._acceleration.to_tuple(),
+            "acceleration_magnitude": self._acceleration.magnitude(),
+            "restitution": self.restitution,
+        })
+        return data
+
+    def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
+        """Get metadata for all editable Ball parameters."""
+        return {
+            "radius": {
+                "type": "float",
+                "default": self.radius,
+                "min": 0.1,
+                "max": 2.0,
+                "label": "Radius",
+            },
+            "mass": {
+                "type": "float",
+                "default": self.mass,
+                "min": 0.1,
+                "max": 100.0,
+                "label": "Mass (kg)",
+            },
+            "velocity_x": {
+                "type": "float",
+                "default": self.velocity.x,
+                "label": "Velocity X (m/s)",
+            },
+            "velocity_y": {
+                "type": "float",
+                "default": self.velocity.y,
+                "label": "Velocity Y (m/s)",
+            },
+            "restitution": {
+                "type": "float",
+                "default": self.restitution,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Restitution",
+            },
+            "drag_coefficient": {
+                "type": "float",
+                "default": self._drag_coefficient,
+                "min": 0.0,
+                "max": 5.0,
+                "label": "Drag Coefficient",
+            },
+            "color": {
+                "type": "color",
+                "default": self.color,
+                "label": "Color",
+            },
+        }
+
+    def update_physics_data(self, config: dict[str, Any]) -> bool:
+        """Update ball parameters from config dict."""
+        try:
+            if "radius" in config:
+                self.radius = float(config["radius"])
+            if "mass" in config:
+                self.mass = float(config["mass"])
+            if "velocity_x" in config or "velocity_y" in config:
+                vx = float(config.get("velocity_x", self.velocity.x))
+                vy = float(config.get("velocity_y", self.velocity.y))
+                self.velocity = Vector2D(vx, vy)
+            if "restitution" in config:
+                self.restitution = float(config["restitution"])
+            if "drag_coefficient" in config:
+                self._drag_coefficient = float(config["drag_coefficient"])
+            if "color" in config:
+                self.color = config["color"]
+            return True
+        except (ValueError, TypeError):
+            return False
 
     @classmethod
     def create_cannonball(

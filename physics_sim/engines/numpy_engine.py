@@ -134,3 +134,10 @@ class NumpyPhysicsEngine(PhysicsEngine):
 
     def toggle_pause(self) -> None:
         self._paused = not self._paused
+
+    def get_supported_entity_types(self) -> list[type]:
+        """Return list of entity classes supported by NumpyPhysicsEngine."""
+        return [Ball]
+
+    def get_entities_types(self) -> list[Entity]:
+        return [Ball]

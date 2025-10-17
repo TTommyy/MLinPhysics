@@ -1,14 +1,15 @@
 import arcade
 
 from physics_sim.core import PhysicsEngine, Vector2D
-from physics_sim.rendering import ArcadeRenderer
 from physics_sim.simulation.config import SimulationConfig
-from physics_sim.ui import (
-    ControlPanel,
-    EntitySelector,
-    InventoryPanel,
-    PlaceholderPanel,
+from physics_sim.ui import EntitySelector
+from physics_sim.ui.sections import (
+    ControlPanelSection,
+    InventoryPanelSection,
+    PlaceholderSection,
+    ViewportSection,
 )
+from physics_sim.ui.views import EntityEditorView
 
 
 class Simulator(arcade.Window):
@@ -16,7 +17,7 @@ class Simulator(arcade.Window):
 
     Integrates:
     - Physics engine (pluggable via dependency injection)
-    - Renderer (Arcade-based visualization)
+    - Section-based UI architecture
     - Input handling
     - Update/render loop
     """
@@ -45,37 +46,26 @@ class Simulator(arcade.Window):
         # Create layout manager
         self.layout = config.create_layout_manager()
 
-        # Create renderer with viewport region
-        viewport = self.layout.viewport
-        self.renderer = ArcadeRenderer(
-            region=viewport, sim_width=config.sim_width, sim_height=config.sim_height
+        # Create sections (manually managed)
+        self.control_section = ControlPanelSection(
+            self.layout.control_panel, initial_engine="numpy"
         )
-        self.renderer.show_debug = config.show_debug_info
-
-        # Create UI components with layout regions
-        self.control_panel = ControlPanel(self.layout.control_panel)
-        self.inventory_panel = InventoryPanel(self.layout.inventory_panel)
-
-        # Create placeholder panels
-        self.top_placeholder = PlaceholderPanel(
-            self.layout.top_placeholder, "Top Panel (Future)", (220, 220, 240)
+        self.viewport_section = ViewportSection(
+            self.layout.viewport, config.sim_width, config.sim_height
         )
-        self.bottom_placeholder = PlaceholderPanel(
-            self.layout.bottom_placeholder, "Bottom Panel (Future)", (220, 220, 240)
+        self.inventory_section = InventoryPanelSection(self.layout.inventory_panel)
+        self.top_placeholder = PlaceholderSection(
+            self.layout.top_placeholder, "Top Panel (Future)"
+        )
+        self.bottom_placeholder = PlaceholderSection(
+            self.layout.bottom_placeholder, "Bottom Panel (Future)"
         )
 
-        # Entity selection and editing
+        # Entity selection
         self.entity_selector = EntitySelector()
 
-        # Setup control panel callbacks
-        self.control_panel.on_engine_change = self._on_engine_change
-        self.control_panel.on_add_mode_toggle = self._on_add_mode_toggle
-        self.control_panel.on_grid_toggle = self._on_grid_toggle
-        self.control_panel.on_debug_toggle = self._on_debug_toggle
-        self.control_panel.on_pause_toggle = self._on_pause_toggle
-        self.control_panel.on_entity_save = self._on_entity_saved
-        self.control_panel.on_entity_delete = self._on_entity_deleted
-        self.control_panel.on_edit_entity = self._on_edit_entity_button
+        # Setup callbacks
+        self._setup_callbacks()
 
         # Add mode state
         self.add_mode = False
@@ -87,18 +77,34 @@ class Simulator(arcade.Window):
 
         arcade.set_background_color(arcade.color.WHITE)
 
+    def _setup_callbacks(self):
+        """Setup control panel callbacks."""
+        self.control_section.engine_controls.on_engine_change = self._on_engine_change
+        self.control_section.placement_controls.on_add_mode_toggle = (
+            self._on_add_mode_toggle
+        )
+        self.control_section.placement_controls.on_object_type_change = (
+            self._on_object_type_change
+        )
+        self.control_section.display_controls.on_grid_toggle = self._on_grid_toggle
+        self.control_section.display_controls.on_pause_toggle = self._on_pause_toggle
+        self.control_section.display_controls.on_edit_entity = (
+            self._on_edit_entity_button
+        )
+
     def setup(self):
         """Initialize simulation state (called after window creation)."""
-        # Enable control panel UI manager
-        self.control_panel.enable()
+        # Enable control panel UI
+        self.control_section.enable()
 
         # Set initial button states
-        self.control_panel.set_grid_enabled(self.renderer.show_grid)
-        self.control_panel.set_debug_enabled(self.renderer.show_debug)
+        self.control_section.display_controls.set_grid_enabled(
+            self.viewport_section.renderer.show_grid
+        )
 
         # Load available entity types from engine
         entity_types = self.engine.get_supported_entity_types()
-        self.control_panel.set_available_entity_types(entity_types)
+        self.control_section.placement_controls.set_available_entity_types(entity_types)
 
         # Maximize window on startup
         self.maximize()
@@ -106,7 +112,7 @@ class Simulator(arcade.Window):
     def pause(self) -> None:
         """Toggle pause state of the simulation."""
         self.engine.toggle_pause()
-        self.renderer.toggle_pause()
+        self.viewport_section.renderer.toggle_pause()
 
     def on_update(self, delta_time: float):
         """Update physics simulation.
@@ -129,32 +135,22 @@ class Simulator(arcade.Window):
         """Render the simulation."""
         self.clear()
 
-        # Render placeholder panels
-        self.top_placeholder.render()
-        self.bottom_placeholder.render()
+        # Draw all sections manually
+        self.viewport_section.on_draw()
+        self.top_placeholder.on_draw()
+        self.bottom_placeholder.on_draw()
+        self.control_section.on_draw()
+        self.inventory_section.on_draw()
 
-        # Render simulation viewport
-        # Draw viewport background (white)
-        viewport = self.layout.viewport
-        arcade.draw_lrbt_rectangle_filled(
-            viewport.left,
-            viewport.right,
-            viewport.bottom,
-            viewport.top,
-            arcade.color.WHITE,
-        )
-
-        # Render grid (if enabled)
-        self.renderer.render_grid()
-
-        # Render entities
+        # Render viewport entities
         entities = self.engine.get_entities()
-        self.renderer.render_entities(entities)
+        self.viewport_section.render_with_data(entities)
 
-        # Render UI panels (on top)
-        self.control_panel.render()
+        # Render inventory with data
         engine_name = self.engine.__class__.__name__.replace("PhysicsEngine", "")
-        self.inventory_panel.render(entities, self._current_fps, engine_name)
+        self.inventory_section.render_with_data(
+            entities, self._current_fps, engine_name
+        )
 
     def on_key_press(self, key: int, modifiers: int):
         """Handle keyboard input.
@@ -163,37 +159,32 @@ class Simulator(arcade.Window):
             key: Key code that was pressed
             modifiers: Bitwise AND of modifier keys (shift, ctrl, etc.)
         """
-        # Toggle debug info with F1
-        if key == arcade.key.F1:
-            self.renderer.toggle_debug()
-
         # Toggle grid with G
-        elif key == arcade.key.G:
-            self.renderer.toggle_grid()
+        if key == arcade.key.G:
+            self.viewport_section.renderer.toggle_grid()
+            self.control_section.display_controls.set_grid_enabled(
+                self.viewport_section.renderer.show_grid
+            )
 
         # Toggle add mode with A
         elif key == arcade.key.A:
             self.add_mode = not self.add_mode
-            self.control_panel.set_add_mode(self.add_mode)
+            self.control_section.placement_controls.set_add_mode(self.add_mode)
+            self.control_section.update_status()
 
         # Close window with ESC (or exit add mode if active)
         elif key == arcade.key.ESCAPE:
             if self.add_mode:
                 self.add_mode = False
-                self.control_panel.set_add_mode(False)
+                self.control_section.placement_controls.set_add_mode(False)
+                self.control_section.update_status()
             else:
                 self.close()
 
         # Cycle object type with Tab (when in add mode)
         elif key == arcade.key.TAB and self.add_mode:
-            # Simulate button click to cycle through entity types
-            self.control_panel._cycle_object_type(None)
-
-        # TODO: Add more controls
-        # - Space: Pause/resume simulation
-        # - R: Reset simulation
-        # - C: Clear all entities
-        # - 1-9: Switch between preset scenarios
+            self.control_section.placement_controls.cycle_type()
+            self.control_section.update_status()
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
         """Handle mouse clicks.
@@ -206,8 +197,9 @@ class Simulator(arcade.Window):
         """
         if button == arcade.MOUSE_BUTTON_LEFT:
             # Convert screen coordinates to physics coordinates
-            phys_x = self.renderer.screen_to_physics_x(x)
-            phys_y = self.renderer.screen_to_physics_y(y)
+            renderer = self.viewport_section.renderer
+            phys_x = renderer.screen_to_physics_x(x)
+            phys_y = renderer.screen_to_physics_y(y)
             click_pos = Vector2D(phys_x, phys_y)
 
             # In pause mode: allow entity selection
@@ -216,49 +208,25 @@ class Simulator(arcade.Window):
                 selected = self.entity_selector.select_entity(click_pos, entities)
                 if selected:
                     entity_type = selected.get_physics_data().get("type", "Entity")
-                    self.control_panel.set_entity_selected(True, entity_type)
+                    self.control_section.display_controls.set_entity_selected(
+                        True, entity_type
+                    )
                 else:
-                    self.control_panel.set_entity_selected(False)
+                    self.control_section.display_controls.set_entity_selected(False)
                 return
 
             # In add mode: create new entity
             if not self.add_mode:
                 return
 
-            entity_class = self.control_panel.get_selected_entity_type()
+            entity_class = (
+                self.control_section.placement_controls.get_selected_entity_type()
+            )
             if entity_class:
-                # Store position for later use in _on_entity_saved
+                # Store position for later use in editor
                 self._pending_entity_position = Vector2D(phys_x, phys_y)
-                # Show editor for creating new entity
-                self.control_panel.show_entity_editor(entity_class=entity_class)
-
-    def on_mouse_drag(
-        self, x: float, y: float, dx: float, dy: float, buttons: int, modifiers: int
-    ):
-        """Handle mouse drag events.
-
-        Args:
-            x: Current screen X coordinate
-            y: Current screen Y coordinate
-            dx: Change in X
-            dy: Change in Y
-            buttons: Which mouse buttons are pressed
-            modifiers: Bitwise AND of modifier keys
-        """
-        # TODO: Implement ball launching (drag to set velocity)
-        #
-        # On drag start: create temporary ball
-        # During drag: show trajectory preview
-        # On release: set velocity based on drag vector and add to simulation
-        pass
-
-    def add_entity(self, entity):
-        """Convenience method to add entity to physics engine."""
-        self.engine.add_entity(entity)
-
-    def clear_entities(self):
-        """Remove all entities from simulation."""
-        self.engine.clear()
+                # Show entity editor view
+                self.show_entity_editor(entity_class=entity_class)
 
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
         """Handle mouse scroll for inventory panel scrolling.
@@ -269,7 +237,27 @@ class Simulator(arcade.Window):
             scroll_x: Scroll amount X
             scroll_y: Scroll amount Y
         """
-        self.inventory_panel.on_mouse_scroll(x, y, scroll_x, scroll_y)
+        self.inventory_section.on_mouse_scroll(x, y, scroll_x, scroll_y)
+
+    def show_entity_editor(
+        self, entity_class: type | None = None, entity_instance=None
+    ):
+        """Show entity editor view.
+
+        Args:
+            entity_class: Entity class for creation
+            entity_instance: Entity instance for editing
+        """
+        editor_view = EntityEditorView(self, entity_class, entity_instance)
+        self.show_view(editor_view)
+
+    def add_entity(self, entity):
+        """Convenience method to add entity to physics engine."""
+        self.engine.add_entity(entity)
+
+    def clear_entities(self):
+        """Remove all entities from simulation."""
+        self.engine.clear()
 
     def _on_engine_change(self, engine_name: str):
         """Handle engine change request from control panel.
@@ -307,7 +295,7 @@ class Simulator(arcade.Window):
 
         # Reload entity types for new engine
         entity_types = new_engine.get_supported_entity_types()
-        self.control_panel.set_available_entity_types(entity_types)
+        self.control_section.placement_controls.set_available_entity_types(entity_types)
 
         print(f"Engine switched to: {engine_name}")
 
@@ -318,16 +306,22 @@ class Simulator(arcade.Window):
             enabled: Whether add mode is enabled
         """
         self.add_mode = enabled
+        self.control_section.update_status()
+
+    def _on_object_type_change(self, entity_class: type):
+        """Handle object type change from control panel.
+
+        Args:
+            entity_class: Selected entity class
+        """
+        self.control_section.update_status()
 
     def _on_grid_toggle(self):
         """Handle grid toggle from control panel."""
-        self.renderer.toggle_grid()
-        self.control_panel.set_grid_enabled(self.renderer.show_grid)
-
-    def _on_debug_toggle(self):
-        """Handle debug info toggle from control panel."""
-        self.renderer.toggle_debug()
-        self.control_panel.set_debug_enabled(self.renderer.show_debug)
+        self.viewport_section.renderer.toggle_grid()
+        self.control_section.display_controls.set_grid_enabled(
+            self.viewport_section.renderer.show_grid
+        )
 
     def _on_pause_toggle(self):
         """Handle pause toggle from control panel."""
@@ -335,53 +329,15 @@ class Simulator(arcade.Window):
         # Clear selection and update UI when toggling pause
         if not self.engine.is_paused():
             self.entity_selector.clear_selection()
-            self.control_panel.set_entity_selected(False)
+            self.control_section.display_controls.set_entity_selected(False)
+        # Update edit button availability
+        self.control_section.display_controls.update_edit_button_availability()
 
     def _on_edit_entity_button(self):
         """Handle edit entity button click."""
         entity = self.entity_selector.get_selected_entity()
         if entity:
-            self.control_panel.show_entity_editor(entity_instance=entity)
-
-    def _on_entity_saved(self, data: dict, entity_instance, entity_class: type):
-        """Handle entity save from control panel editor.
-
-        Args:
-            data: Updated parameter values
-            entity_instance: Existing entity (None for creation)
-            entity_class: Entity class (used for creation)
-        """
-        if entity_instance:
-            # Editing existing entity
-            entity_instance.update_physics_data(data)
-        else:
-            # Creating new entity - get position from pending_entity_position
-            position = getattr(self, "_pending_entity_position", Vector2D(0, 0))
-
-            # Handle velocity
-            velocity_x = data.get("velocity_x", 0.0)
-            velocity_y = data.get("velocity_y", 0.0)
-            velocity = Vector2D(velocity_x, velocity_y)
-            mass = data.get("mass", 1.0)
-
-            # Create entity
-            entity = entity_class(
-                position=position,
-                velocity=velocity,
-                mass=mass,
-            )
-
-            # Apply other parameters
-            entity.update_physics_data(data)
-
-            # Add to engine
-            self.engine.add_entity(entity)
-
-    def _on_entity_deleted(self, entity_id: str):
-        """Handle entity deletion."""
-        self.engine.remove_entity(entity_id)
-        self.entity_selector.clear_selection()
-        self.control_panel.set_entity_selected(False)
+            self.show_entity_editor(entity_instance=entity)
 
     def run(self):
         """Start the simulation."""

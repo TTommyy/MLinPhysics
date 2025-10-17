@@ -18,8 +18,17 @@ class PlaceholderPanel:
             color: Background color RGB tuple
         """
         self.region = region
-        self.label = label
         self.color = color
+        self.text = arcade.Text(
+            label,
+            region.center_x,
+            region.center_y,
+            arcade.color.DARK_GRAY,
+            16,
+            anchor_x="center",
+            anchor_y="center",
+            bold=True,
+        )
 
     def render(self) -> None:
         """Render the placeholder panel."""
@@ -43,16 +52,7 @@ class PlaceholderPanel:
         )
 
         # Draw centered label
-        arcade.draw_text(
-            self.label,
-            self.region.center_x,
-            self.region.center_y,
-            arcade.color.DARK_GRAY,
-            16,
-            anchor_x="center",
-            anchor_y="center",
-            bold=True,
-        )
+        self.text.draw()
 
 
 __all__: list[str] = ["PlaceholderPanel"]

@@ -68,3 +68,13 @@ class PhysicsEngine(ABC):
     def clear_forces(self) -> None:
         """Remove all forces from the simulation."""
         self.forces.clear()
+
+    @abstractmethod
+    def pause(self) -> None:
+        """Pause the physics simulation."""
+        pass
+
+    @abstractmethod
+    def is_paused(self) -> bool:
+        """Check if physics simulation is paused."""
+        pass

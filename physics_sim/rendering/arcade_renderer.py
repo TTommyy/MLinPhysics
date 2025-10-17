@@ -21,6 +21,8 @@ class ArcadeRenderer(Renderer):
         sim_height: float,
         viewport_x: int = 0,
         viewport_width: int | None = None,
+        margin_top: int = 100,
+        margin_bottom: int = 100,
     ):
         """
         Args:
@@ -30,13 +32,17 @@ class ArcadeRenderer(Renderer):
             sim_height: Simulation height in physics units
             viewport_x: X offset where viewport starts (default 0)
             viewport_width: Width of viewport in pixels (default screen_width)
+            margin_top: Margin from top of screen in pixels
+            margin_bottom: Margin from bottom of screen in pixels
         """
         super().__init__(screen_width, screen_height, sim_width, sim_height)
         self.viewport_x = viewport_x
         self.viewport_width = viewport_width or screen_width
-
+        self.margin_top = margin_top
+        self.margin_bottom = margin_bottom
         # Recalculate scale based on viewport width instead of screen width
         self.scale = self.viewport_width / sim_width
+        self._paused = False
 
     def physics_to_screen_x(self, x: float) -> float:
         """Convert physics X coordinate to screen coordinate."""
@@ -48,7 +54,7 @@ class ArcadeRenderer(Renderer):
         Note: Flips Y axis since physics has origin at bottom-left
         and screen has origin at top-left.
         """
-        return self.screen_height - (y * self.scale)
+        return (self.screen_height - self.margin_bottom) - (y * self.scale)
 
     def screen_to_physics_x(self, x: float) -> float:
         """Convert screen X coordinate to physics coordinate."""
@@ -56,7 +62,7 @@ class ArcadeRenderer(Renderer):
 
     def screen_to_physics_y(self, y: float) -> float:
         """Convert screen Y coordinate to physics coordinate."""
-        return (self.screen_height - y) / self.scale
+        return ((self.screen_height - self.margin_bottom) - y) / self.scale
 
     def clear(self) -> None:
         """Clear the screen."""
@@ -249,3 +255,15 @@ class ArcadeRenderer(Renderer):
         """Render UI elements (panels, buttons, etc.)."""
         # UI elements handle their own rendering in arcade
         pass
+
+    def pause(self) -> None:
+        """Pauses the simulation."""
+        self._paused = True
+
+    def is_paused(self) -> bool:
+        """Returns True if the simulation is paused."""
+        return self._paused
+
+    def toggle_pause(self) -> None:
+        """Toggles the pause state of the simulation."""
+        self._paused = not self._paused

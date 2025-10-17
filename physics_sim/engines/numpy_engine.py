@@ -1,5 +1,4 @@
-from physics_sim.core import PhysicsEngine, Entity, Vector2D
-
+from physics_sim.core import Entity, PhysicsEngine, Vector2D
 from physics_sim.entities.ball import Ball
 
 
@@ -18,6 +17,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
     def __init__(self, gravity: Vector2D, bounds: tuple[float, float]):
         super().__init__(gravity, bounds)
         self._entities: dict[str, Entity] = {}
+        self._paused: bool = False
 
     def add_entity(self, entity: Entity) -> None:
         self._entities[entity.id] = entity
@@ -34,6 +34,9 @@ class NumpyPhysicsEngine(PhysicsEngine):
 
     def step(self, dt: float) -> None:
         """Advance simulation using Euler integration."""
+        if self._paused:
+            return
+
         for entity in self._entities.values():
             if isinstance(entity, Ball):
                 self._integrate_ball(entity, dt)
@@ -122,3 +125,12 @@ class NumpyPhysicsEngine(PhysicsEngine):
     #                 impulse = normal * impulse_magnitude
     #                 ball1.velocity = ball1.velocity - impulse / ball1.mass
     #                 ball2.velocity = ball2.velocity + impulse / ball2.mass
+
+    def pause(self) -> None:
+        self._paused = True
+
+    def is_paused(self) -> bool:
+        return self._paused
+
+    def toggle_pause(self) -> None:
+        self._paused = not self._paused

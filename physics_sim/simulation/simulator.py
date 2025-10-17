@@ -62,6 +62,7 @@ class Simulator(arcade.Window):
         self.control_panel.on_add_mode_toggle = self._on_add_mode_toggle
         self.control_panel.on_grid_toggle = self._on_grid_toggle
         self.control_panel.on_debug_toggle = self._on_debug_toggle
+        self.control_panel.on_pause_toggle = self._on_pause_toggle
 
         # Add mode state
         self.add_mode = False
@@ -85,6 +86,11 @@ class Simulator(arcade.Window):
 
         # Maximize window on startup
         self.maximize()
+
+    def pause(self) -> None:
+        """Toggle pause state of the simulation."""
+        self.engine.toggle_pause()
+        self.renderer.toggle_pause()
 
     def on_update(self, delta_time: float):
         """Update physics simulation.
@@ -299,6 +305,10 @@ class Simulator(arcade.Window):
         """Handle debug info toggle from control panel."""
         self.renderer.toggle_debug()
         self.control_panel.set_debug_enabled(self.renderer.show_debug)
+
+    def _on_pause_toggle(self):
+        """Handle pause toggle from control panel."""
+        self.pause()
 
     def run(self):
         """Start the simulation."""

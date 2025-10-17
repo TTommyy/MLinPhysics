@@ -83,3 +83,13 @@ class Renderer(ABC):
     def toggle_grid(self) -> None:
         """Toggle grid display."""
         self.show_grid = not self.show_grid
+
+    @abstractmethod
+    def pause(self) -> None:
+        """Pause rendering/input handling."""
+        pass
+
+    @abstractmethod
+    def is_paused(self) -> bool:
+        """Check if renderer is paused."""
+        pass

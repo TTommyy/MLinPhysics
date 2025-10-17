@@ -31,6 +31,7 @@ class ControlPanel:
         self.selected_engine = "numpy"
         self.add_mode = False
         self.selected_object_type = "Ball"
+        self.is_paused: bool = False
 
         # Callbacks
         self.on_engine_change = None
@@ -38,6 +39,7 @@ class ControlPanel:
         self.on_object_type_change = None
         self.on_grid_toggle = None
         self.on_debug_toggle = None
+        self.on_pause_toggle = None
 
         self._setup_ui()
 
@@ -126,6 +128,14 @@ class ControlPanel:
         self.debug_button.on_click = self._toggle_debug
         v_box.add(self.debug_button)
 
+        self.pause_button = arcade.gui.UIFlatButton(
+            text="Pause: OFF",
+            width=220,
+            height=35,
+        )
+        self.pause_button.on_click = self._toggle_pause
+        v_box.add(self.pause_button)
+
         # Spacer
         v_box.add(arcade.gui.UISpace(height=10))
 
@@ -151,6 +161,7 @@ class ControlPanel:
         shortcuts = [
             "A - Toggle add mode",
             "TAB - Switch object type",
+            "SPACE - Pause",
             "ESC - Exit mode/quit",
         ]
 
@@ -209,6 +220,13 @@ class ControlPanel:
         if self.on_debug_toggle:
             self.on_debug_toggle()
 
+    def _toggle_pause(self, event):
+        """Toggle pause state."""
+        self.is_paused = not self.is_paused
+        self.pause_button.text = f"Pause: {'ON' if self.is_paused else 'OFF'}"
+        if self.on_pause_toggle:
+            self.on_pause_toggle()
+
     def _update_status(self):
         """Update status label based on current mode."""
         if self.add_mode:
@@ -244,6 +262,15 @@ class ControlPanel:
             enabled: Whether debug info is enabled
         """
         self.debug_button.text = f"Debug: {'ON' if enabled else 'OFF'}"
+
+    def set_pause_enabled(self, enabled: bool):
+        """Set pause state programmatically.
+
+        Args:
+            enabled: Whether pause is enabled
+        """
+        self.is_paused = enabled
+        self.pause_button.text = f"Pause: {'ON' if enabled else 'OFF'}"
 
     def render(self):
         """Render the control panel with background."""

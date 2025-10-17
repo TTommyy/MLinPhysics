@@ -30,6 +30,7 @@ class PymunkPhysicsEngine(PhysicsEngine):
         # Track entity mappings
         self._entities: dict[str, Entity] = {}
         self._entity_bodies: dict[str, pymunk.Body] = {}
+        self._paused = False
 
         # Create boundary walls
         self._create_boundaries()
@@ -104,6 +105,9 @@ class PymunkPhysicsEngine(PhysicsEngine):
 
     def step(self, dt: float) -> None:
         """Advance simulation using pymunk's solver with custom forces."""
+        if self._paused:
+            return
+
         # Apply custom forces to entities
         for entity_id, entity in self._entities.items():
             if isinstance(entity, Ball) and entity_id in self._entity_bodies:
@@ -154,3 +158,15 @@ class PymunkPhysicsEngine(PhysicsEngine):
     #         return True
     #
     #     engine.add_collision_handler(BALL_TYPE, BALL_TYPE, on_ball_collision)
+
+    def pause(self) -> None:
+        """Pause the simulation."""
+        self._paused = True
+
+    def is_paused(self) -> bool:
+        """Check if the simulation is currently paused."""
+        return self._paused
+
+    def toggle_pause(self) -> None:
+        """Toggle the pause state of the simulation."""
+        self._paused = not self._paused

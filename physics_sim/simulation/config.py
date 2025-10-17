@@ -21,8 +21,8 @@ class SimulationConfig:
     inventory_panel_width: int = 350
 
     # Physics settings
-    sim_width: float = 20.0
-    sim_height: float = 13.33
+    sim_width: float = 12
+    sim_height: float = 8
     gravity: Vector2D = Vector2D(0.0, 10.0)
     timestep: float = 1.0 / 60.0
 
@@ -60,24 +60,4 @@ class SimulationConfig:
             screen_height=height,
             sim_width=sim_width,
             sim_height=sim_height,
-        )
-
-    @classmethod
-    def cannonball_demo(cls) -> "SimulationConfig":
-        """Config matching the original JavaScript cannonball demo."""
-        return cls(
-            screen_width=1200,
-            screen_height=800,
-            window_title="Cannonball Demo",
-            engine_type="numpy",
-        )
-
-    @classmethod
-    def pymunk_demo(cls) -> "SimulationConfig":
-        """Config for demonstrating Pymunk engine."""
-        return cls(
-            screen_width=1200,
-            screen_height=800,
-            window_title="Pymunk Physics Demo",
-            engine_type="pymunk",
         )

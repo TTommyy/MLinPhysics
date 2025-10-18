@@ -1,3 +1,5 @@
+import logging
+
 import arcade
 
 from physics_sim.core import PhysicsEngine, Vector2D
@@ -9,7 +11,8 @@ from physics_sim.ui.sections import (
     PlaceholderSection,
     ViewportSection,
 )
-from physics_sim.ui.views import EntityEditorView
+
+logger = logging.getLogger(__name__)
 
 
 class Simulator(arcade.Window):
@@ -48,7 +51,8 @@ class Simulator(arcade.Window):
 
         # Create sections (manually managed)
         self.control_section = ControlPanelSection(
-            self.layout.control_panel, initial_engine="numpy"
+            self.layout.control_panel,
+            initial_engine="numpy",
         )
         self.viewport_section = ViewportSection(
             self.layout.viewport, config.sim_width, config.sim_height
@@ -91,9 +95,12 @@ class Simulator(arcade.Window):
         self.control_section.display_controls.on_edit_entity = (
             self._on_edit_entity_button
         )
+        self.control_section.entity_editor.on_save = self._on_entity_editor_save
 
     def setup(self):
         """Initialize simulation state (called after window creation)."""
+        logger.info("Setting up simulator")
+
         # Enable control panel UI
         self.control_section.enable()
 
@@ -104,10 +111,14 @@ class Simulator(arcade.Window):
 
         # Load available entity types from engine
         entity_types = self.engine.get_supported_entity_types()
+        logger.info(
+            f"Loaded {len(entity_types)} entity types: {[t.__name__ for t in entity_types]}"
+        )
         self.control_section.placement_controls.set_available_entity_types(entity_types)
 
         # Maximize window on startup
         self.maximize()
+        logger.info("Simulator setup complete")
 
     def pause(self) -> None:
         """Toggle pause state of the simulation."""
@@ -159,8 +170,11 @@ class Simulator(arcade.Window):
             key: Key code that was pressed
             modifiers: Bitwise AND of modifier keys (shift, ctrl, etc.)
         """
+        logger.debug(f"Key pressed: {key} (modifiers: {modifiers})")
+
         # Toggle grid with G
         if key == arcade.key.G:
+            logger.info("Toggling grid display")
             self.viewport_section.renderer.toggle_grid()
             self.control_section.display_controls.set_grid_enabled(
                 self.viewport_section.renderer.show_grid
@@ -169,20 +183,24 @@ class Simulator(arcade.Window):
         # Toggle add mode with A
         elif key == arcade.key.A:
             self.add_mode = not self.add_mode
+            logger.info(f"Add mode toggled: {self.add_mode}")
             self.control_section.placement_controls.set_add_mode(self.add_mode)
             self.control_section.update_status()
 
         # Close window with ESC (or exit add mode if active)
         elif key == arcade.key.ESCAPE:
             if self.add_mode:
+                logger.info("Exiting add mode via ESC")
                 self.add_mode = False
                 self.control_section.placement_controls.set_add_mode(False)
                 self.control_section.update_status()
             else:
+                logger.info("Closing window via ESC")
                 self.close()
 
         # Cycle object type with Tab (when in add mode)
         elif key == arcade.key.TAB and self.add_mode:
+            logger.info("Cycling entity type")
             self.control_section.placement_controls.cycle_type()
             self.control_section.update_status()
 
@@ -195,6 +213,8 @@ class Simulator(arcade.Window):
             button: Mouse button that was clicked
             modifiers: Bitwise AND of modifier keys
         """
+        logger.debug(f"Mouse click: button={button}, screen=({x:.1f}, {y:.1f})")
+
         if button == arcade.MOUSE_BUTTON_LEFT:
             # Convert screen coordinates to physics coordinates
             renderer = self.viewport_section.renderer
@@ -202,31 +222,69 @@ class Simulator(arcade.Window):
             phys_y = renderer.screen_to_physics_y(y)
             click_pos = Vector2D(phys_x, phys_y)
 
+            logger.debug(f"Physics coords: ({phys_x:.2f}, {phys_y:.2f})")
+            logger.debug(
+                f"Add mode: {self.add_mode}, Paused: {self.engine.is_paused()}"
+            )
+
+            # In add mode: create new entity (takes priority)
+            if self.add_mode:
+                entity_class = (
+                    self.control_section.placement_controls.get_selected_entity_type()
+                )
+                logger.info(f"Add mode active, selected entity type: {entity_class}")
+                if entity_class:
+                    try:
+                        # Get parameters from entity editor panel
+                        params = self.control_section.entity_editor.get_parameters()
+                        logger.debug(f"Creating entity with params: {params}")
+
+                        # Extract velocity and mass
+                        velocity_x = params.get("velocity_x", 0.0)
+                        velocity_y = params.get("velocity_y", 0.0)
+                        velocity = Vector2D(velocity_x, velocity_y)
+                        mass = params.get("mass", 1.0)
+
+                        # Create entity
+                        entity = entity_class(
+                            position=click_pos,
+                            velocity=velocity,
+                            mass=mass,
+                        )
+
+                        # Update with remaining parameters
+                        entity.update_physics_data(params)
+
+                        # Add to engine
+                        self.engine.add_entity(entity)
+                        logger.info(
+                            f"Created {entity_class.__name__} at ({phys_x:.2f}, {phys_y:.2f})"
+                        )
+                    except Exception as e:
+                        logger.error(f"Failed to create entity: {e}")
+                else:
+                    logger.warning("Add mode active but no entity type selected")
+                return
+
             # In pause mode: allow entity selection
             if self.engine.is_paused():
+                logger.debug("Paused mode: attempting entity selection")
                 entities = self.engine.get_entities()
                 selected = self.entity_selector.select_entity(click_pos, entities)
                 if selected:
                     entity_type = selected.get_physics_data().get("type", "Entity")
+                    logger.info(f"Entity selected: {entity_type}")
                     self.control_section.display_controls.set_entity_selected(
                         True, entity_type
                     )
+                    # Load entity into editor for editing
+                    self.control_section.entity_editor.set_entity_instance(selected)
                 else:
+                    logger.debug("No entity selected at click position")
                     self.control_section.display_controls.set_entity_selected(False)
-                return
-
-            # In add mode: create new entity
-            if not self.add_mode:
-                return
-
-            entity_class = (
-                self.control_section.placement_controls.get_selected_entity_type()
-            )
-            if entity_class:
-                # Store position for later use in editor
-                self._pending_entity_position = Vector2D(phys_x, phys_y)
-                # Show entity editor view
-                self.show_entity_editor(entity_class=entity_class)
+                    # Clear editor if nothing selected
+                    if not self.add_mode:
+                        self.control_section.entity_editor.clear()
 
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
         """Handle mouse scroll for inventory panel scrolling.
@@ -239,20 +297,11 @@ class Simulator(arcade.Window):
         """
         self.inventory_section.on_mouse_scroll(x, y, scroll_x, scroll_y)
 
-    def show_entity_editor(
-        self, entity_class: type | None = None, entity_instance=None
-    ):
-        """Show entity editor view.
-
-        Args:
-            entity_class: Entity class for creation
-            entity_instance: Entity instance for editing
-        """
-        editor_view = EntityEditorView(self, entity_class, entity_instance)
-        self.show_view(editor_view)
-
     def add_entity(self, entity):
         """Convenience method to add entity to physics engine."""
+        logger.info(
+            f"Adding entity: {entity.__class__.__name__} at position {entity.position}"
+        )
         self.engine.add_entity(entity)
 
     def clear_entities(self):
@@ -265,6 +314,8 @@ class Simulator(arcade.Window):
         Args:
             engine_name: Name of the new engine ("numpy" or "pymunk")
         """
+        logger.info(f"Changing engine to: {engine_name}")
+
         # Update config
         self._config.engine_type = engine_name
 
@@ -295,9 +346,10 @@ class Simulator(arcade.Window):
 
         # Reload entity types for new engine
         entity_types = new_engine.get_supported_entity_types()
+        logger.info(f"Available entity types: {[t.__name__ for t in entity_types]}")
         self.control_section.placement_controls.set_available_entity_types(entity_types)
 
-        print(f"Engine switched to: {engine_name}")
+        logger.info(f"Engine successfully switched to: {engine_name}")
 
     def _on_add_mode_toggle(self, enabled: bool):
         """Handle add mode toggle from control panel.
@@ -306,6 +358,19 @@ class Simulator(arcade.Window):
             enabled: Whether add mode is enabled
         """
         self.add_mode = enabled
+        logger.info(f"Add mode: {enabled}")
+
+        if enabled:
+            # Show entity editor in add mode
+            entity_class = (
+                self.control_section.placement_controls.get_selected_entity_type()
+            )
+            if entity_class:
+                self.control_section.entity_editor.set_entity_type(entity_class)
+        else:
+            # Clear entity editor when exiting add mode
+            self.control_section.entity_editor.clear()
+
         self.control_section.update_status()
 
     def _on_object_type_change(self, entity_class: type):
@@ -314,6 +379,12 @@ class Simulator(arcade.Window):
         Args:
             entity_class: Selected entity class
         """
+        logger.info(f"Entity type changed to: {entity_class.__name__}")
+
+        # Update entity editor if in add mode
+        if self.add_mode:
+            self.control_section.entity_editor.set_entity_type(entity_class)
+
         self.control_section.update_status()
 
     def _on_grid_toggle(self):
@@ -337,7 +408,23 @@ class Simulator(arcade.Window):
         """Handle edit entity button click."""
         entity = self.entity_selector.get_selected_entity()
         if entity:
-            self.show_entity_editor(entity_instance=entity)
+            logger.info(f"Loading entity for editing: {entity.__class__.__name__}")
+            self.control_section.entity_editor.set_entity_instance(entity)
+
+    def _on_entity_editor_save(self, params: dict):
+        """Handle save from entity editor panel.
+
+        Args:
+            params: Dictionary of updated entity parameters
+        """
+        logger.info("Saving entity from editor")
+        entity = self.control_section.entity_editor.entity_instance
+        if entity:
+            try:
+                entity.update_physics_data(params)
+                logger.info(f"Entity updated: {entity.__class__.__name__}")
+            except Exception as e:
+                logger.error(f"Failed to update entity: {e}")
 
     def run(self):
         """Start the simulation."""

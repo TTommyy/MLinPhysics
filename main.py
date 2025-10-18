@@ -1,3 +1,5 @@
+import logging
+
 import arcade
 
 from physics_sim import (
@@ -7,6 +9,13 @@ from physics_sim import (
     NumpyPhysicsEngine,
     SimulationConfig,
     Simulator,
+)
+
+# Configure logging
+logging.basicConfig(
+    level=logging.DEBUG,
+    format="%(asctime)s - %(name)s - %(levelname)s - %(message)s",
+    datefmt="%H:%M:%S",
 )
 
 

@@ -24,7 +24,7 @@ class SimulationConfig:
     # Physics settings
     sim_width: float = 12
     sim_height: float = 8
-    gravity: Vector2D = Vector2D(0.0, 10.0)
+    gravity: Vector2D = Vector2D(0.0, -9.81)
     timestep: float = 1.0 / 60.0
 
     # Engine selection

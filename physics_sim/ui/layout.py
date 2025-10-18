@@ -23,6 +23,7 @@ class LayoutManager:
             control_panel_width_pct: Control panel width as percentage (0.0-1.0)
             inventory_panel_width_pct: Inventory panel width as percentage (0.0-1.0)
             viewport_height_pct: Viewport height as percentage (0.0-1.0)
+            control_panel_split_pct: Percentage of control panel for top section (0.0-1.0)
         """
         self.screen_width = screen_width
         self.screen_height = screen_height

@@ -22,21 +22,6 @@ class EngineControls:
         )
         self.layout.add(label)
 
-        # Engine toggle button
-        self.engine_button = arcade.gui.UIFlatButton(
-            text=self.selected_engine.upper(),
-            width=self.button_width,
-            height=35,
-        )
-        self.engine_button.on_click = self._toggle_engine
-        self.layout.add(self.engine_button)
-
-    def _toggle_engine(self, event):
-        """Toggle between numpy and pymunk engines."""
-        self.selected_engine = "pymunk" if self.selected_engine == "numpy" else "numpy"
-        self.engine_button.text = self.selected_engine.upper()
-        if self.on_engine_change:
-            self.on_engine_change(self.selected_engine)
 
     def get_layout(self) -> arcade.gui.UIBoxLayout:
         """Get the widget layout."""

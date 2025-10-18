@@ -72,5 +72,23 @@ class Force(ABC):
         # Note: This is a fallback. Subclasses should override for performance.
         return forces
 
+    def get_potential_energy_contribution(
+        self,
+        positions: np.ndarray,
+        masses: np.ndarray,
+        **kwargs,
+    ) -> float:
+        """Calculate potential energy contribution from this force.
+
+        Args:
+            positions: Position vectors, shape (n, 2)
+            masses: Mass values, shape (n,)
+            **kwargs: Additional force-specific parameters
+
+        Returns:
+            Total potential energy contribution in Joules
+        """
+        return 0.0
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name})"

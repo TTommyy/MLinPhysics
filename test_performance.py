@@ -65,7 +65,7 @@ def test_engine_performance(n_balls: int, n_steps: int = 600):
         print("  ✗ Below 60 FPS target")
 
     # Check entities still exist
-    entities = engine.get_entities()
+    entities = engine.get_inventory_data()
     print(f"\n  Entities in simulation: {len(entities)}")
 
     return n_steps / elapsed

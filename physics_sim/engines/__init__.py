@@ -1,5 +1,4 @@
-__all__: list[str] = ["NumpyPhysicsEngine", "PymunkPhysicsEngine"]
+__all__: list[str] = ["NumpyPhysicsEngine"]
 
 from .numpy_engine import NumpyPhysicsEngine
-from .pymunk_engine import PymunkPhysicsEngine
 

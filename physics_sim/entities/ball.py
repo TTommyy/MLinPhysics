@@ -26,8 +26,8 @@ class Ball(PhysicalEntity):
     ):
         """
         Args:
-            position: Initial position as np.ndarray([x, y]) or Vector2D (for compat)
-            velocity: Initial velocity as np.ndarray([x, y]) or Vector2D (for compat)
+            position: Initial position as np.ndarray([x, y])
+            velocity: Initial velocity as np.ndarray([x, y])
             radius: Ball radius in simulation units
             mass: Ball mass (affects physics interactions)
             color: RGB color tuple (0-255 each)

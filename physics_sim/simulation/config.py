@@ -1,4 +1,6 @@
-from dataclasses import dataclass
+from dataclasses import dataclass, field
+
+import numpy as np
 
 
 @dataclass
@@ -23,12 +25,14 @@ class SimulationConfig:
     sim_width: float = 12
     sim_height: float = 8
     timestep: float = 1.0 / 60.0
+    gravity: np.ndarray = field(default_factory=lambda: np.array([0.0, -9.81]))
 
     # Engine selection
-    engine_type: str = "numpy"  # "numpy" or "pymunk"
+    engine_type: str = "numpy"  # "numpy"
 
     # Debug settings
     show_debug_info: bool = True
+    energy_calc_interval: float = 1.0  # Frequency of energy calculations in seconds
 
     def create_layout_manager(self):
         """Create a LayoutManager instance from this config.

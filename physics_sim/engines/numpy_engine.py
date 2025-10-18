@@ -244,20 +244,6 @@ class NumpyPhysicsEngine(PhysicsEngine):
         del self._id_to_index[entity_id]
         self._n_entities -= 1
 
-    def get_entities(self) -> list[Entity]:
-        """Legacy method for backward compatibility.
-
-        Deprecated: Use get_render_data() or get_inventory_data() instead.
-        This creates temporary entity objects which is inefficient.
-        """
-        # For backward compatibility, recreate entity objects on demand
-        entities = []
-        for i in range(self._n_entities):
-            entity = self.get_entity_for_editing(self._entity_ids[i])
-            if entity:
-                entities.append(entity)
-        return entities
-
     def clear(self) -> None:
         """Remove all entities from the simulation."""
         self._n_entities = 0
@@ -576,3 +562,49 @@ class NumpyPhysicsEngine(PhysicsEngine):
     def _set_mass(self, idx: int, value: float):
         """Set mass for entity at index."""
         self._masses[idx] = value
+
+    def get_energies(self) -> dict[str, float]:
+        """Calculate total kinetic and potential energy in the system.
+
+        Returns:
+            Dictionary with kinetic, potential, and total energy
+        """
+        if self._n_entities == 0:
+            return {"kinetic": 0.0, "potential": 0.0, "total": 0.0}
+
+        n = self._n_entities
+        dyn = self._dynamic_mask[:n]
+
+        # Kinetic energy: KE = 0.5 * m * v²
+        velocities_sq = np.sum(self._velocities[:n][dyn] ** 2, axis=1)
+        kinetic_energy = float(0.5 * np.sum(self._masses[:n][dyn] * velocities_sq))
+
+        # Potential energy: Sum contributions from all forces
+        potential_energy = 0.0
+        for force in self.forces:
+            pe_contribution = force.get_potential_energy_contribution(
+                positions=self._positions[:n][dyn],
+                masses=self._masses[:n][dyn],
+            )
+            potential_energy += pe_contribution
+
+        total_energy = kinetic_energy + potential_energy
+
+        return {
+            "kinetic": kinetic_energy,
+            "potential": potential_energy,
+            "total": total_energy,
+        }
+
+    def get_entity_counts_by_type(self) -> dict[str, int]:
+        """Get count of entities by type.
+
+        Returns:
+            Dictionary mapping entity type names to counts
+        """
+        counts = {}
+        for i in range(self._n_entities):
+            entity_type = EntityType(self._entity_types[i])
+            type_name = entity_type.name
+            counts[type_name] = counts.get(type_name, 0) + 1
+        return counts

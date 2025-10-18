@@ -8,14 +8,14 @@ class PhysicsEngine(ABC):
     """Abstract base class for physics engine implementations.
 
     Uses Strategy pattern to allow swapping between different physics
-    implementations (numpy-based custom, pymunk, etc.) while maintaining
+    implementations (numpy-based custom, etc.) while maintaining
     the same interface.
     """
 
     def __init__(self, bounds: tuple[float, float]):
         """
         Args:
-            gravity: Gravity acceleration as np.ndarray([x, y]) or Vector2D (for compat)
+            gravity: Gravity acceleration as np.ndarray([x, y])
             bounds: (width, height) of simulation space
         """
         self.bounds = bounds
@@ -34,11 +34,6 @@ class PhysicsEngine(ABC):
     @abstractmethod
     def step(self, dt: float) -> None:
         """Advance the physics simulation by dt seconds."""
-        pass
-
-    @abstractmethod
-    def get_entities(self) -> list[Entity]:
-        """Get all entities currently in the simulation."""
         pass
 
     @abstractmethod
@@ -135,5 +130,17 @@ class PhysicsEngine(ABC):
 
         Returns:
             True if successful, False otherwise
+        """
+        pass
+
+    @abstractmethod
+    def get_energies(self) -> dict[str, float]:
+        """Calculate total kinetic and potential energy in the system.
+
+        Returns:
+            Dictionary with keys:
+                - 'kinetic': Total kinetic energy (Joules)
+                - 'potential': Total potential energy (Joules)
+                - 'total': Total energy (Joules)
         """
         pass

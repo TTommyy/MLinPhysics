@@ -208,7 +208,6 @@ source = { editable = "." }
 dependencies = [
     { name = "arcade" },
     { name = "numpy" },
-    { name = "pymunk" },
 ]
 
 [package.optional-dependencies]
@@ -223,7 +222,6 @@ requires-dist = [
     { name = "arcade", specifier = ">=3.0.0" },
     { name = "black", marker = "extra == 'dev'", specifier = ">=23.0.0" },
     { name = "numpy", specifier = ">=1.24.0" },
-    { name = "pymunk", specifier = ">=6.0.0" },
     { name = "pytest", marker = "extra == 'dev'", specifier = ">=7.0.0" },
     { name = "ruff", marker = "extra == 'dev'", specifier = ">=0.1.0" },
 ]

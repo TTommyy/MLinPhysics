@@ -25,7 +25,7 @@ def main():
         arcade.get_display_size()[0], arcade.get_display_size()[1]
     )
 
-    # Print info
+    # Create engine
     engine = NumpyPhysicsEngine(
         bounds=(config.sim_width, config.sim_height),
     )

@@ -21,18 +21,15 @@ class RectangleObstacle(Entity):
     ):
         """
         Args:
-            position: Center position as np.ndarray([x, y]) or Vector2D (for compat)
+            position: Center position as np.ndarray([x, y])
             width: Width of the rectangle
             height: Height of the rectangle
             color: RGB color tuple (0-255 each)
             entity_id: Optional unique identifier
         """
         super().__init__(entity_id)
-        # Accept both numpy arrays and Vector2D for backward compatibility
-        if hasattr(position, "x"):
-            self.position = np.array([position.x, position.y])
-        else:
-            self.position = position
+
+        self.position = position
         self.width = width
         self.height = height
         self.color = color
@@ -154,17 +151,13 @@ class CircleObstacle(Entity):
     ):
         """
         Args:
-            position: Center position as np.ndarray([x, y]) or Vector2D (for compat)
+            position: Center position as np.ndarray([x, y])
             radius: Radius of the circle
             color: RGB color tuple (0-255 each)
             entity_id: Optional unique identifier
         """
         super().__init__(entity_id)
-        # Accept both numpy arrays and Vector2D for backward compatibility
-        if hasattr(position, "x"):
-            self.position = np.array([position.x, position.y])
-        else:
-            self.position = position
+        self.position = position
         self.radius = radius
         self.color = color
         self.static = True

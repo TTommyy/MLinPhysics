@@ -1,5 +1,4 @@
 __all__: list[str] = [
-    "Vector2D",
     "Entity",
     "PhysicalEntity",
     "PhysicsEngine",
@@ -7,7 +6,6 @@ __all__: list[str] = [
     "RectangleObstacle",
     "CircleObstacle",
     "NumpyPhysicsEngine",
-    "PymunkPhysicsEngine",
     "Renderer",
     "ArcadeRenderer",
     "Force",
@@ -26,9 +24,9 @@ from physics_sim.core import (
     PhysicalEntity,
     PhysicsEngine,
     Renderer,
-    Vector2D,
+
 )
-from physics_sim.engines import NumpyPhysicsEngine, PymunkPhysicsEngine
+from physics_sim.engines import NumpyPhysicsEngine
 from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
 from physics_sim.forces import DragForce, LinearGravityForce, ThrustForce
 from physics_sim.simulation.config import SimulationConfig

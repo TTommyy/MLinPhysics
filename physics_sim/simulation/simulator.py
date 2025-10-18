@@ -8,8 +8,9 @@ from physics_sim.simulation.config import SimulationConfig
 from physics_sim.ui import EntitySelector
 from physics_sim.ui.sections import (
     ControlPanelSection,
+    DebugInfoSection,
+    EnergyManagerSection,
     InventoryPanelSection,
-    PlaceholderSection,
     ViewportSection,
 )
 
@@ -35,7 +36,7 @@ class Simulator(arcade.Window):
         """
         Args:
             config: Simulation configuration
-            engine: Physics engine instance (numpy or pymunk)
+            engine: Physics engine instance (numpy )
         """
         super().__init__(
             width=config.screen_width,
@@ -59,11 +60,9 @@ class Simulator(arcade.Window):
             self.layout.viewport, config.sim_width, config.sim_height
         )
         self.inventory_section = InventoryPanelSection(self.layout.inventory_panel)
-        self.top_placeholder = PlaceholderSection(
-            self.layout.top_placeholder, "Top Panel (Future)"
-        )
-        self.bottom_placeholder = PlaceholderSection(
-            self.layout.bottom_placeholder, "Bottom Panel (Future)"
+        self.debug_info_section = DebugInfoSection(self.layout.top_placeholder)
+        self.energy_manager_section = EnergyManagerSection(
+            self.layout.bottom_placeholder
         )
 
         # Entity selection
@@ -80,11 +79,14 @@ class Simulator(arcade.Window):
         self._fps_counter = 0
         self._current_fps = fps
 
+        # Track energy
+        self._energy_timer = 0.0
+        self._simulation_time = 0.0
+
         arcade.set_background_color(arcade.color.WHITE)
 
     def _setup_callbacks(self):
         """Setup control panel callbacks."""
-        self.control_section.engine_controls.on_engine_change = self._on_engine_change
         self.control_section.placement_controls.on_add_mode_toggle = (
             self._on_add_mode_toggle
         )
@@ -102,8 +104,9 @@ class Simulator(arcade.Window):
         """Initialize simulation state (called after window creation)."""
         logger.info("Setting up simulator")
 
-        # Enable control panel UI
+        # Enable UI sections
         self.control_section.enable()
+        self.inventory_section.enable()
 
         # Set initial button states
         self.control_section.display_controls.set_grid_enabled(
@@ -135,6 +138,10 @@ class Simulator(arcade.Window):
         # Use fixed timestep for deterministic physics
         self.engine.step(self._config.timestep)
 
+        # Update simulation time
+        if not self.engine.is_paused():
+            self._simulation_time += self._config.timestep
+
         # Update FPS calculation
         self._fps_counter += 1
         self._fps_timer += delta_time
@@ -143,14 +150,27 @@ class Simulator(arcade.Window):
             self._fps_counter = 0
             self._fps_timer = 0.0
 
+        # Update energy tracking
+        self._energy_timer += delta_time
+        if self._energy_timer >= self._config.energy_calc_interval:
+            energies = self.engine.get_energies()
+            self.energy_manager_section.add_energy_sample(
+                ke=energies["kinetic"],
+                pe=energies["potential"],
+                total=energies["total"],
+                time=self._simulation_time,
+            )
+
+            self._energy_timer = 0.0
+
     def on_draw(self):
         """Render the simulation."""
         self.clear()
 
         # Draw all sections manually
         self.viewport_section.on_draw()
-        self.top_placeholder.on_draw()
-        self.bottom_placeholder.on_draw()
+        self.debug_info_section.on_draw()
+        self.energy_manager_section.on_draw()
         self.control_section.on_draw()
         self.inventory_section.on_draw()
 
@@ -158,12 +178,15 @@ class Simulator(arcade.Window):
         render_data = self.engine.get_render_data()
         self.viewport_section.render_with_data(render_data)
 
-        # Render inventory with physics data
-        inventory_data = self.engine.get_inventory_data()
-        engine_name = self.engine.__class__.__name__.replace("PhysicsEngine", "")
-        self.inventory_section.render_with_data(
-            inventory_data, self._current_fps, engine_name
+        # Render debug info
+        entity_counts = self.engine.get_entity_counts_by_type()
+        self.debug_info_section.render_with_data(
+            fps=self._current_fps,
+            engine_name=self._config.engine_type,
+            entity_counts=entity_counts,
         )
+        inventory_data = self.engine.get_inventory_data()
+        self.inventory_section.render_with_data(inventory_data)
 
     def on_key_press(self, key: int, modifiers: int):
         """Handle keyboard input.
@@ -300,49 +323,6 @@ class Simulator(arcade.Window):
     def clear_entities(self):
         """Remove all entities from simulation."""
         self.engine.clear()
-
-    def _on_engine_change(self, engine_name: str):
-        """Handle engine change request from control panel.
-
-        Args:
-            engine_name: Name of the new engine ("numpy" or "pymunk")
-        """
-        logger.info(f"Changing engine to: {engine_name}")
-
-        # Update config
-        self._config.engine_type = engine_name
-
-        # Clear all entities
-        self.engine.clear()
-
-        # Create new engine based on selected type
-        if engine_name == "numpy":
-            from physics_sim import DragForce, LinearGravityForce, NumpyPhysicsEngine
-
-            new_engine = NumpyPhysicsEngine(
-                gravity=self._config.gravity,
-                bounds=(self._config.sim_width, self._config.sim_height),
-            )
-            new_engine.add_force(LinearGravityForce(self._config.gravity))
-            new_engine.add_force(DragForce())
-        else:  # pymunk
-            from physics_sim import DragForce, PymunkPhysicsEngine
-
-            new_engine = PymunkPhysicsEngine(
-                gravity=self._config.gravity,
-                bounds=(self._config.sim_width, self._config.sim_height),
-            )
-            new_engine.add_force(DragForce())
-
-        # Replace the engine
-        self.engine = new_engine
-
-        # Reload entity types for new engine
-        entity_types = new_engine.get_supported_entity_types()
-        logger.info(f"Available entity types: {[t.__name__ for t in entity_types]}")
-        self.control_section.placement_controls.set_available_entity_types(entity_types)
-
-        logger.info(f"Engine successfully switched to: {engine_name}")
 
     def _on_add_mode_toggle(self, enabled: bool):
         """Handle add mode toggle from control panel.

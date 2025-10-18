@@ -19,7 +19,6 @@ class ControlPanelSection(BaseSection):
     def __init__(
         self,
         control_region: LayoutRegion,
-        initial_engine: str = "numpy",
     ):
         super().__init__(control_region, background_color=(245, 245, 245))
 

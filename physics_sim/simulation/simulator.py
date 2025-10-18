@@ -54,7 +54,6 @@ class Simulator(arcade.Window):
         # Create sections (manually managed)
         self.control_section = ControlPanelSection(
             self.layout.control_panel,
-            initial_engine="numpy",
         )
         self.viewport_section = ViewportSection(
             self.layout.viewport, config.sim_width, config.sim_height
@@ -135,11 +134,10 @@ class Simulator(arcade.Window):
         Args:
             delta_time: Time elapsed since last update (seconds)
         """
-        # Use fixed timestep for deterministic physics
-        self.engine.step(self._config.timestep)
 
         # Update simulation time
         if not self.engine.is_paused():
+            self.engine.step(self._config.timestep)
             self._simulation_time += self._config.timestep
 
         # Update FPS calculation

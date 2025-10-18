@@ -182,6 +182,11 @@ class Ball(PhysicalEntity):
                 "max": 100.0,
                 "label": "Mass (kg)",
             },
+            "position": {
+                "type": "vector",
+                "default": self.position.tolist(),
+                "label": "Position [x, y]",
+            },
             "velocity": {
                 "type": "vector",
                 "default": self.velocity.tolist(),
@@ -208,6 +213,8 @@ class Ball(PhysicalEntity):
                 self.radius = float(config["radius"])
             if "mass" in config:
                 self.mass = float(config["mass"])
+            if "position" in config:
+                self.velocity = np.array(config["position"])
             if "velocity" in config:
                 self.velocity = np.array(config["velocity"])
             if "restitution" in config:
@@ -226,11 +233,11 @@ class Ball(PhysicalEntity):
     ) -> "Ball":
         """Factory method: Create a red cannonball with default properties."""
         return cls(
-            position=position if position is not None else np.array([0.2, 0.2]),
-            velocity=velocity if velocity is not None else np.array([10.0, 10.0]),
-            radius=0.2,
+            position=position if position is not None else np.array([0.5, 0.5]),
+            velocity=velocity if velocity is not None else np.array([10.0, 15.0]),
+            radius=0.5,
             mass=1.0,
-            color=(255, 0, 0),
+            color=(255, 10, 10),
             restitution=1.0,
         )
 

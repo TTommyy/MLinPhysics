@@ -324,13 +324,13 @@ class Simulator(arcade.Window):
 
         # Create new engine based on selected type
         if engine_name == "numpy":
-            from physics_sim import DragForce, GravityForce, NumpyPhysicsEngine
+            from physics_sim import DragForce, LinearGravityForce, NumpyPhysicsEngine
 
             new_engine = NumpyPhysicsEngine(
                 gravity=self._config.gravity,
                 bounds=(self._config.sim_width, self._config.sim_height),
             )
-            new_engine.add_force(GravityForce(self._config.gravity))
+            new_engine.add_force(LinearGravityForce(self._config.gravity))
             new_engine.add_force(DragForce())
         else:  # pymunk
             from physics_sim import DragForce, PymunkPhysicsEngine

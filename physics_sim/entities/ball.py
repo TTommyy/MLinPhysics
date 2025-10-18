@@ -1,3 +1,4 @@
+import math
 from typing import Any
 
 from physics_sim.core import PhysicalEntity, Vector2D
@@ -18,7 +19,7 @@ class Ball(PhysicalEntity):
         mass: float = 1.0,
         color: tuple[int, int, int] = (255, 0, 0),
         restitution: float = 1.0,
-        drag_coefficient: float = 0.1,
+        drag_coefficient: float = 0.47,
         entity_id: str | None = None,
     ):
         """
@@ -32,12 +33,22 @@ class Ball(PhysicalEntity):
             entity_id: Optional unique identifier
         """
         super().__init__(position, velocity, mass, entity_id)
-        self.radius = radius
+        self._radius = radius
         self.color = color
         self.restitution = restitution
         self._drag_coefficient = drag_coefficient
-        self._drag_enabled = False
+        self._drag_enabled = True
         self._acceleration = Vector2D(0, 0)
+        self._cross_sectional_area = self._calcualate_cross_sectional_area()
+
+    @property
+    def radius(self) -> float:
+        return self._radius
+
+    @radius.setter
+    def radius(self, value: float):
+        self._radius = value
+        self._cross_sectional_area = self._calcualate_cross_sectional_area()
 
     @property
     def drag_enabled(self) -> bool:
@@ -46,6 +57,10 @@ class Ball(PhysicalEntity):
     @property
     def drag_coefficient(self) -> float:
         return self._drag_coefficient
+
+    @property
+    def cross_sectional_area(self) -> float:
+        return self._cross_sectional_area
 
     def apply_force(self, force: Vector2D):
         """Apply a force using F = ma."""
@@ -124,13 +139,6 @@ class Ball(PhysicalEntity):
                 "max": 1.0,
                 "label": "Restitution",
             },
-            "drag_coefficient": {
-                "type": "float",
-                "default": self._drag_coefficient,
-                "min": 0.0,
-                "max": 5.0,
-                "label": "Drag Coefficient",
-            },
             "color": {
                 "type": "color",
                 "default": self.color,
@@ -151,8 +159,6 @@ class Ball(PhysicalEntity):
                 self.velocity = Vector2D(vx, vy)
             if "restitution" in config:
                 self.restitution = float(config["restitution"])
-            if "drag_coefficient" in config:
-                self._drag_coefficient = float(config["drag_coefficient"])
             if "color" in config:
                 self.color = config["color"]
             return True
@@ -199,3 +205,6 @@ class Ball(PhysicalEntity):
             ),
             restitution=random.uniform(0.7, 1.0),
         )
+
+    def _calcualate_cross_sectional_area(self):
+        return math.pi * (self.radius**2)

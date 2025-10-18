@@ -11,7 +11,7 @@ __all__: list[str] = [
     "Renderer",
     "ArcadeRenderer",
     "Force",
-    "GravityForce",
+    "LinearGravityForce",
     "DragForce",
     "ThrustForce",
     "InventoryPanel",
@@ -30,7 +30,7 @@ from physics_sim.core import (
 )
 from physics_sim.engines import NumpyPhysicsEngine, PymunkPhysicsEngine
 from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
-from physics_sim.forces import DragForce, GravityForce, ThrustForce
+from physics_sim.forces import DragForce, LinearGravityForce, ThrustForce
 from physics_sim.simulation.config import SimulationConfig
 
 try:

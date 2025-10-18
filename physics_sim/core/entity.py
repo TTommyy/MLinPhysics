@@ -39,23 +39,29 @@ class PhysicalEntity(Entity):
         """Apply a force to this entity."""
         pass
 
+
     @property
     def drag_enabled(self) -> bool:
-        """Whether thrust/propulsion is currently enabled.
+        """Whether drag force is currently enabled.
 
-        Subclasses with thrust capability should override this property.
-        Default is False (no thrust).
+        Subclasses without drag force should override this property.
+        Default is Ture.
         """
-        return False
+        True
 
     @property
     def drag_coefficient(self) -> float:
         """Coefficient of drag for air resistance calculations.
 
         Subclasses should override this property to provide entity-specific drag coefficients.
-        Default value is 0.1 for basic drag calculations.
         """
-        return 0.1
+        pass
+
+
+    @property
+    def cross_sectional_area() -> float:
+        """Cross sectional area for drag fore calculation"""
+        pass
 
     @property
     def thrust_enabled(self) -> bool:

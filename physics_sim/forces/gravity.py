@@ -1,18 +1,18 @@
 from physics_sim.core import Entity, Force, PhysicalEntity, Vector2D
 
 
-class GravityForce(Force):
+class LinearGravityForce(Force):
     """Global gravitational force (F = m * g).
 
     Applies to all PhysicalEntity instances.
     """
 
-    def __init__(self, acceleration: Vector2D):
+    def __init__(self, acceleration: Vector2D = Vector2D(0, -9.81)):
         """
         Args:
             acceleration: Gravitational acceleration vector (e.g., Vector2D(0, -9.81))
         """
-        super().__init__("Gravity")
+        super().__init__("LinearGravityForce")
         self.acceleration = acceleration
 
     def should_apply_to(self, entity: Entity) -> bool:
@@ -26,4 +26,4 @@ class GravityForce(Force):
         return Vector2D(0, 0)
 
     def __repr__(self) -> str:
-        return f"GravityForce(acceleration={self.acceleration})"
+        return f"LinearGravityForce(acceleration={self.acceleration})"

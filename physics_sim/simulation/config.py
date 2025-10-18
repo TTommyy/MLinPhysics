@@ -69,7 +69,7 @@ class SimulationConfig:
         viewport_height = int(height * viewport_height_pct)
 
         # Calculate simulation dimensions based on viewport aspect ratio
-        sim_min_width = 100.0
+        sim_min_width = 20
         viewport_aspect_ratio = viewport_width / viewport_height
         sim_width = sim_min_width
         sim_height = sim_min_width / viewport_aspect_ratio

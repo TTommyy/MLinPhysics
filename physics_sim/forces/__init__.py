@@ -1,6 +1,6 @@
 __all__: list[str] = [
     "Force",
-    "GravityForce",
+    "LinearGravityForce",
     "DragForce",
     "ThrustForce",
     "EntitySpecificForce",
@@ -8,5 +8,5 @@ __all__: list[str] = [
 
 from .custom_force import EntitySpecificForce
 from .drag import DragForce
-from .gravity import GravityForce
+from .gravity import LinearGravityForce
 from .thrust import ThrustForce

@@ -4,14 +4,13 @@ import arcade.gui
 from physics_sim.core import LayoutRegion
 from physics_sim.ui.control_panel import (
     DisplayControls,
-    EngineControls,
     EntityEditorPanel,
     PlacementControls,
     StatusDisplay,
 )
 from physics_sim.ui.sections.base_section import BaseSection
 
-SPLIT_PCT = 0.5
+SPLIT_PCT = 0.45
 
 
 class ControlPanelSection(BaseSection):
@@ -51,7 +50,6 @@ class ControlPanelSection(BaseSection):
         button_width = max(120, control_region.width - 50)
 
         # Widget components
-        self.engine_controls = EngineControls(initial_engine, button_width)
         self.placement_controls = PlacementControls(button_width)
         self.display_controls = DisplayControls(button_width)
         self.status_display = StatusDisplay()
@@ -75,17 +73,14 @@ class ControlPanelSection(BaseSection):
         v_box.add(arcade.gui.UISpace(height=5))
 
         # Add widget groups
-        v_box.add(self.engine_controls.get_layout())
-        v_box.add(arcade.gui.UISpace(height=10))
-
-        v_box.add(self.placement_controls.get_layout())
-        v_box.add(arcade.gui.UISpace(height=10))
-
         v_box.add(self.display_controls.get_layout())
         v_box.add(arcade.gui.UISpace(height=10))
 
         v_box.add(self.status_display.get_layout())
         v_box.add(arcade.gui.UISpace(height=15))
+
+        v_box.add(self.placement_controls.get_layout())
+        v_box.add(arcade.gui.UISpace(height=10))
 
         # Create anchor positioned at the top of controls region
         anchor = arcade.gui.UIAnchorLayout()
@@ -161,7 +156,7 @@ class ControlPanelSection(BaseSection):
             self.controls_region.right,
             self.controls_region.bottom,
             self.controls_region.top,
-            (245, 245, 245),
+            arcade.color.LIGHT_STEEL_BLUE,
         )
 
         # Draw editor section (bottom)
@@ -170,7 +165,7 @@ class ControlPanelSection(BaseSection):
             self.editor_region.right,
             self.editor_region.bottom,
             self.editor_region.top,
-            (235, 235, 235),
+            arcade.color.WHITE_SMOKE,
         )
 
         # Draw separator line between sections
@@ -179,8 +174,8 @@ class ControlPanelSection(BaseSection):
             self.editor_region.top,
             self.editor_region.right,
             self.editor_region.top,
-            (200, 200, 200),
-            2,
+            arcade.color.BLACK_LEATHER_JACKET,
+            4,
         )
 
         # Draw right border for entire panel

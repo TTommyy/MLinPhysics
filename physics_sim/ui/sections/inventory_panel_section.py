@@ -24,6 +24,11 @@ class InventoryPanelSection(BaseSection):
 
         # Text cache for performance
         self.entity_text_cache = {}
+
+        # Cache for inventory data and rendered entities
+        self._cached_inventory_data: list[dict] = []
+        self._cached_page_entities: list[dict] = []
+
         self._create_text_objects()
         self._create_pagination_ui()
 
@@ -80,26 +85,44 @@ class InventoryPanelSection(BaseSection):
         """Handle previous page button click."""
         if self.current_page > 0:
             self.current_page -= 1
+            self._update_page_from_cache()
 
     def _on_next_page(self, event):
         """Handle next page button click."""
         if self.current_page < self.total_pages - 1:
             self.current_page += 1
+            self._update_page_from_cache()
+
+    def _update_page_from_cache(self):
+        """Update the displayed page entities from cached data."""
+        if not self._cached_inventory_data:
+            return
+
+        # Recalculate which entities to show for current page
+        start_idx = self.current_page * self.items_per_page
+        end_idx = min(start_idx + self.items_per_page, len(self._cached_inventory_data))
+        self._cached_page_entities = self._cached_inventory_data[start_idx:end_idx]
 
     def on_draw(self):
         """Draw the inventory panel section."""
         self.draw_background()
         self.draw_border(sides="left")
 
+        # Draw cached inventory data
+        self._draw_cached_inventory()
+
         # Draw UI elements
         self.ui_manager.draw()
 
     def render_with_data(self, inventory_data: list[dict]):
-        """Render inventory with entity data and pagination.
+        """Update cached inventory data.
 
         Args:
             inventory_data: List of entity data dicts from engine
         """
+        # Cache the new inventory data
+        self._cached_inventory_data = inventory_data
+
         # Update pagination
         entity_count = len(inventory_data)
         self.total_pages = max(
@@ -107,35 +130,40 @@ class InventoryPanelSection(BaseSection):
         )
         self.current_page = min(self.current_page, self.total_pages - 1)
 
-        # Draw page indicator
+        # Calculate which entities to show
+        start_idx = self.current_page * self.items_per_page
+        end_idx = min(start_idx + self.items_per_page, entity_count)
+        self._cached_page_entities = inventory_data[start_idx:end_idx]
+
+        # Clean up text cache for entities not on current page
+        current_page_ids = {data["id"] for data in self._cached_page_entities}
+        stale_ids = set(self.entity_text_cache.keys()) - current_page_ids
+        for stale_id in list(stale_ids)[:10]:  # Clean up 10 per frame to avoid lag
+            del self.entity_text_cache[stale_id]
+
+    def _draw_cached_inventory(self):
+        """Draw the cached inventory data."""
+        if not self._cached_inventory_data:
+            return
+
+        # Update page indicator
         self.page_indicator_text.text = (
             f"Page {self.current_page + 1}/{self.total_pages}"
         )
         self.page_indicator_text.draw()
-
-        # Calculate which entities to show
-        start_idx = self.current_page * self.items_per_page
-        end_idx = min(start_idx + self.items_per_page, entity_count)
-        page_entities = inventory_data[start_idx:end_idx]
 
         # Draw entities for current page
         entity_start_y = self.region.top - 80
         y_offset = entity_start_y
         card_spacing = 15
 
-        for data in page_entities:
+        for data in self._cached_page_entities:
             y_offset = self._render_entity_card(data, y_offset)
             y_offset -= card_spacing
 
         # Update button states
         self.prev_button.disabled = self.current_page == 0
         self.next_button.disabled = self.current_page >= self.total_pages - 1
-
-        # Clean up text cache for entities not on current page
-        current_page_ids = {data["id"] for data in page_entities}
-        stale_ids = set(self.entity_text_cache.keys()) - current_page_ids
-        for stale_id in list(stale_ids)[:10]:  # Clean up 10 per frame to avoid lag
-            del self.entity_text_cache[stale_id]
 
     def _render_entity_card(self, data: dict, y_offset: float) -> float:
         """Render a single entity as a card.

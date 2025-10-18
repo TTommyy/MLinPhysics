@@ -74,9 +74,7 @@ class EntityEditorPanel:
             label = param_meta.get("label", param_name)
             default = param_meta.get("default")
 
-            if param_type == "color":
-                self._add_color_field(param_name, label, default)
-            elif param_type == "vector":
+            if param_type in ["color", "vector"]:
                 self._add_vector_field(param_name, label, default)
             else:
                 self._add_input_field(param_name, label, default)
@@ -110,9 +108,7 @@ class EntityEditorPanel:
             label = param_meta.get("label", param_name)
             default = param_meta.get("default")
 
-            if param_type == "color":
-                self._add_color_field(param_name, label, default)
-            elif param_type == "vector":
+            if param_type in ["color", "vector"]:
                 self._add_vector_field(param_name, label, default)
             else:
                 self._add_input_field(param_name, label, default)
@@ -143,40 +139,18 @@ class EntityEditorPanel:
         lbl = arcade.gui.UILabel(
             text=label,
             font_size=9,
-            text_color=arcade.color.DARK_GRAY,
+            text_color=arcade.color.BLACK_LEATHER_JACKET,
         )
         field_box.add(lbl)
 
         inp = arcade.gui.UIInputText(
-            text=str(default_value), width=self.button_width, height=25
+            text=str(default_value),
+            width=self.button_width,
+            height=25,
+            text_color=arcade.color.BLACK_BEAN,
         )
         self.editor_input_fields[param_name] = inp
         field_box.add(inp)
-
-        self.layout.add(field_box)
-
-    def _add_color_field(
-        self, param_name: str, label: str, default_value: tuple[int, int, int]
-    ):
-        """Add a color field."""
-        field_box = arcade.gui.UIBoxLayout(space_between=2, vertical=True)
-
-        lbl = arcade.gui.UILabel(
-            text=label,
-            font_size=9,
-            text_color=arcade.color.DARK_GRAY,
-        )
-        field_box.add(lbl)
-
-        self.editor_current_colors[param_name] = default_value
-        btn = arcade.gui.UIFlatButton(
-            text=f"RGB({default_value[0]},{default_value[1]},{default_value[2]})",
-            width=self.button_width,
-            height=25,
-        )
-        btn.on_click = lambda e, n=param_name: self._on_color_click(e, n)
-        self.editor_color_buttons[param_name] = btn
-        field_box.add(btn)
 
         self.layout.add(field_box)
 
@@ -187,18 +161,25 @@ class EntityEditorPanel:
         lbl = arcade.gui.UILabel(
             text=label,
             font_size=9,
-            text_color=arcade.color.DARK_GRAY,
+            text_color=arcade.color.BLACK_LEATHER_JACKET,
         )
         field_box.add(lbl)
 
-        # Format as [x, y]
-        if isinstance(default_value, (list, tuple)):
-            text_value = f"[{default_value[0]}, {default_value[1]}]"
-        else:
-            text_value = str(default_value)
+        formatted = []
+        for x in default_value:
+            if isinstance(x, int):
+                formatted.append(f"{x}")
+            elif isinstance(x, float):
+                formatted.append(f"{x:.2f}")
+            else:
+                formatted.append(str(x))
+        text_value = "[" + ", ".join(formatted) + "]"
 
         inp = arcade.gui.UIInputText(
-            text=text_value, width=self.button_width, height=25
+            text=text_value,
+            width=self.button_width,
+            height=25,
+            text_color=arcade.color.BLACK_BEAN,
         )
         self.editor_vector_fields[param_name] = inp
         field_box.add(inp)

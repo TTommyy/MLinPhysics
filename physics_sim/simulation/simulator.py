@@ -83,7 +83,7 @@ class Simulator(arcade.Window):
         self._energy_timer = 0.0
         self._simulation_time = 0.0
 
-        arcade.set_background_color(arcade.color.WHITE)
+        arcade.set_background_color(arcade.color.PLATINUM)
 
     def _setup_callbacks(self):
         """Setup control panel callbacks."""
@@ -160,7 +160,8 @@ class Simulator(arcade.Window):
                 total=energies["total"],
                 time=self._simulation_time,
             )
-
+            inventory_data = self.engine.get_inventory_data()
+            self.inventory_section.render_with_data(inventory_data)
             self._energy_timer = 0.0
 
     def on_draw(self):
@@ -182,11 +183,8 @@ class Simulator(arcade.Window):
         entity_counts = self.engine.get_entity_counts_by_type()
         self.debug_info_section.render_with_data(
             fps=self._current_fps,
-            engine_name=self._config.engine_type,
             entity_counts=entity_counts,
         )
-        inventory_data = self.engine.get_inventory_data()
-        self.inventory_section.render_with_data(inventory_data)
 
     def on_key_press(self, key: int, modifiers: int):
         """Handle keyboard input.

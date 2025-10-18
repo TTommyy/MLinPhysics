@@ -36,13 +36,6 @@ class DebugInfoSection(BaseSection):
             arcade.color.BLACK,
             10,
         )
-        self.engine_text = arcade.Text(
-            "Engine: Unknown",
-            x + 120,
-            y,
-            arcade.color.BLACK,
-            10,
-        )
         self.entity_counts_text = arcade.Text(
             "",
             x + 280,
@@ -57,17 +50,15 @@ class DebugInfoSection(BaseSection):
         self.draw_border()
 
     def render_with_data(
-        self, fps: float, engine_name: str, entity_counts: dict[str, int]
+        self, fps: float, entity_counts: dict[str, int]
     ):
         """Render debug information.
 
         Args:
             fps: Current frames per second
-            engine_name: Name of the physics engine
             entity_counts: Dictionary mapping entity type names to counts
         """
         self.fps_text.text = f"FPS: {fps:.1f}"
-        self.engine_text.text = f"Engine: {engine_name}"
 
         # Format entity counts
         if entity_counts:
@@ -81,7 +72,6 @@ class DebugInfoSection(BaseSection):
         # Draw all text
         self.title_text.draw()
         self.fps_text.draw()
-        self.engine_text.draw()
         self.entity_counts_text.draw()
 
     def on_update(self, delta_time: float):

@@ -11,7 +11,7 @@ class ViewportSection(BaseSection):
     def __init__(self, region: LayoutRegion, sim_width: float, sim_height: float):
         super().__init__(
             region,
-            background_color=arcade.color.WHITE,
+            background_color=arcade.color.PLATINUM,
             border_color=None,
         )
 

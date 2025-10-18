@@ -27,8 +27,6 @@ class SimulationConfig:
     timestep: float = 1.0 / 60.0
     gravity: np.ndarray = field(default_factory=lambda: np.array([0.0, -9.81]))
 
-    # Engine selection
-    engine_type: str = "numpy"  # "numpy"
 
     # Debug settings
     show_debug_info: bool = True

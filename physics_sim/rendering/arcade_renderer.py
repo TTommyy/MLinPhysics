@@ -56,7 +56,7 @@ class ArcadeRenderer(
     def clear(self) -> None:
         """Clear the screen."""
         arcade.start_render()
-        arcade.set_background_color(arcade.color.WHITE)
+        arcade.set_background_color(arcade.color.PLATINUM)
 
     def render_entities(self, render_data: list[dict]) -> None:
         """Render entities from data dicts (not entity objects)."""

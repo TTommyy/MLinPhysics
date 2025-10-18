@@ -67,9 +67,14 @@ class NumpyPhysicsEngine(PhysicsEngine):
             },
         }
 
-        # Entity object views and lookup
-        self._entity_objects: list[Entity] = []
+        # Entity ID tracking
+        self._entity_ids: list[str] = [None] * self._capacity
         self._id_to_index: dict[str, int] = {}
+
+        # Force tracking (per entity, for UI display)
+        self._applied_forces: list[list[tuple[str, np.ndarray]]] = [
+            [] for _ in range(self._capacity)
+        ]
 
         # Pause state
         self._paused: bool = False
@@ -100,22 +105,27 @@ class NumpyPhysicsEngine(PhysicsEngine):
                 elif isinstance(arr, list):
                     props[key].extend([None] * (new_capacity - self._capacity))
 
+        # Grow ID and force tracking arrays
+        self._entity_ids.extend([None] * (new_capacity - self._capacity))
+        self._applied_forces.extend([[] for _ in range(new_capacity - self._capacity)])
+
         self._capacity = new_capacity
 
     def add_entity(self, entity: Entity) -> None:
-        """Add an entity to the simulation.
+        """Add an entity to the simulation by extracting data to arrays.
 
-        This method accepts both:
-        1. Legacy Entity objects (for backward compatibility)
-        2. Direct entity objects that will be converted to views
+        The entity object is used only for data extraction and then discarded.
+        This maintains the SoA (Structure-of-Arrays) pattern for performance.
 
-        For new code, entities should be created via the engine to be views.
+        Args:
+            entity: Entity object (will not be stored, only data extracted)
         """
         # Check if we need to grow arrays
         if self._n_entities >= self._capacity:
             self._grow_arrays()
 
         idx = self._n_entities
+        entity_id = entity.id
 
         # Determine entity type and populate arrays
         if isinstance(entity, Ball):
@@ -127,12 +137,12 @@ class NumpyPhysicsEngine(PhysicsEngine):
         else:
             raise ValueError(f"Unsupported entity type: {type(entity)}")
 
-        # Store entity object and create mapping
-        self._entity_objects.append(entity)
-        self._id_to_index[entity.id] = idx
+        # Store ID and create mapping (entity object is discarded)
+        self._entity_ids[idx] = entity_id
+        self._id_to_index[entity_id] = idx
         self._n_entities += 1
 
-    def _add_ball(self, ball:Ball, idx: int):
+    def _add_ball(self, ball: Ball, idx: int):
         """Add a Ball entity to arrays."""
         self._positions[idx] = ball.position
         self._entity_types[idx] = EntityType.BALL
@@ -225,23 +235,32 @@ class NumpyPhysicsEngine(PhysicsEngine):
                     elif isinstance(arr, list):
                         arr[idx] = arr[last_idx]
 
-            # Update object and mapping
-            self._entity_objects[idx] = self._entity_objects[last_idx]
-            self._id_to_index[self._entity_objects[idx].id] = idx
+            # Update ID and mapping
+            self._entity_ids[idx] = self._entity_ids[last_idx]
+            self._id_to_index[self._entity_ids[idx]] = idx
+            self._applied_forces[idx] = self._applied_forces[last_idx]
 
         # Remove last entity
-        self._entity_objects.pop()
         del self._id_to_index[entity_id]
         self._n_entities -= 1
 
     def get_entities(self) -> list[Entity]:
-        """Get all entities currently in the simulation."""
-        return self._entity_objects[: self._n_entities]
+        """Legacy method for backward compatibility.
+
+        Deprecated: Use get_render_data() or get_inventory_data() instead.
+        This creates temporary entity objects which is inefficient.
+        """
+        # For backward compatibility, recreate entity objects on demand
+        entities = []
+        for i in range(self._n_entities):
+            entity = self.get_entity_for_editing(self._entity_ids[i])
+            if entity:
+                entities.append(entity)
+        return entities
 
     def clear(self) -> None:
         """Remove all entities from the simulation."""
         self._n_entities = 0
-        self._entity_objects.clear()
         self._id_to_index.clear()
 
     def step(self, dt: float) -> None:
@@ -263,9 +282,8 @@ class NumpyPhysicsEngine(PhysicsEngine):
         self._accelerations[:n][dyn] = 0.0
 
         # Clear force tracking for all entities
-        for entity in self._entity_objects[:n]:
-            if hasattr(entity, "clear_force_tracking"):
-                entity.clear_force_tracking()
+        for i in range(n):
+            self._applied_forces[i].clear()
 
         # Apply all forces (vectorized batch operations)
         for force in self.forces:
@@ -287,9 +305,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
             # Track forces for entities (for UI display)
             dyn_indices = np.where(dyn)[0]
             for i, entity_idx in enumerate(dyn_indices):
-                entity = self._entity_objects[entity_idx]
-                if hasattr(entity, "track_force"):
-                    entity.track_force(force.name, force_vectors[i])
+                self._applied_forces[entity_idx].append((force.name, force_vectors[i]))
 
         # Euler integration (vectorized, dynamic only)
         self._velocities[:n][dyn] += self._accelerations[:n][dyn] * dt
@@ -365,6 +381,184 @@ class NumpyPhysicsEngine(PhysicsEngine):
         from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
 
         return [Ball, RectangleObstacle, CircleObstacle]
+
+    def get_render_data(self) -> list[dict]:
+        """Return rendering data directly from arrays."""
+        render_data = []
+
+        for i in range(self._n_entities):
+            entity_type = EntityType(self._entity_types[i])
+
+            base_data = {
+                "id": self._entity_ids[i],
+                "type": entity_type.name,
+                "position": tuple(self._positions[i]),
+            }
+
+            # Add type-specific properties
+            if entity_type == EntityType.BALL:
+                base_data.update({
+                    "render_type": "circle",
+                    "radius": float(
+                        self._type_properties[EntityType.BALL]["radius"][i]
+                    ),
+                    "color": self._type_properties[EntityType.BALL]["color"][i],
+                })
+            elif entity_type == EntityType.RECTANGLE_OBSTACLE:
+                base_data.update({
+                    "render_type": "rectangle",
+                    "width": float(
+                        self._type_properties[EntityType.RECTANGLE_OBSTACLE]["width"][i]
+                    ),
+                    "height": float(
+                        self._type_properties[EntityType.RECTANGLE_OBSTACLE]["height"][
+                            i
+                        ]
+                    ),
+                    "color": self._type_properties[EntityType.RECTANGLE_OBSTACLE][
+                        "color"
+                    ][i],
+                })
+            elif entity_type == EntityType.CIRCLE_OBSTACLE:
+                base_data.update({
+                    "render_type": "circle_static",
+                    "radius": float(
+                        self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][i]
+                    ),
+                    "color": self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][
+                        i
+                    ],
+                })
+
+            render_data.append(base_data)
+
+        return render_data
+
+    def get_inventory_data(self) -> list[dict]:
+        """Return full physics data for UI panels."""
+        inventory_data = []
+
+        for i in range(self._n_entities):
+            if not self._dynamic_mask[i]:
+                continue  # Skip static entities in inventory
+
+            entity_type = EntityType(self._entity_types[i])
+
+            data = {
+                "id": self._entity_ids[i],
+                "type": entity_type.name,
+                "mass": float(self._masses[i]),
+                "position": tuple(self._positions[i]),
+                "velocity": tuple(self._velocities[i]),
+                "speed": float(np.linalg.norm(self._velocities[i])),
+                "acceleration": tuple(self._accelerations[i]),
+                "applied_forces": [
+                    {
+                        "name": name,
+                        "vector": tuple(vec),
+                        "magnitude": float(np.linalg.norm(vec)),
+                    }
+                    for name, vec in self._applied_forces[i]
+                ],
+            }
+
+            # Add type-specific data
+            if entity_type == EntityType.BALL:
+                data["radius"] = float(
+                    self._type_properties[EntityType.BALL]["radius"][i]
+                )
+                data["restitution"] = float(self._restitutions[i])
+
+            inventory_data.append(data)
+
+        return inventory_data
+
+    def get_entity_for_editing(self, entity_id: str) -> Entity | None:
+        """Create temporary entity object from array data."""
+        if entity_id not in self._id_to_index:
+            return None
+
+        idx = self._id_to_index[entity_id]
+        entity_type = EntityType(self._entity_types[idx])
+
+        # Recreate entity object from array data
+        if entity_type == EntityType.BALL:
+            return Ball(
+                position=self._positions[idx].copy(),
+                velocity=self._velocities[idx].copy(),
+                radius=float(self._type_properties[EntityType.BALL]["radius"][idx]),
+                mass=float(self._masses[idx]),
+                color=self._type_properties[EntityType.BALL]["color"][idx],
+                restitution=float(self._restitutions[idx]),
+                drag_coefficient=float(self._drag_coeffs[idx]),
+                entity_id=entity_id,
+            )
+        elif entity_type == EntityType.RECTANGLE_OBSTACLE:
+            return RectangleObstacle(
+                position=self._positions[idx].copy(),
+                width=float(
+                    self._type_properties[EntityType.RECTANGLE_OBSTACLE]["width"][idx]
+                ),
+                height=float(
+                    self._type_properties[EntityType.RECTANGLE_OBSTACLE]["height"][idx]
+                ),
+                color=self._type_properties[EntityType.RECTANGLE_OBSTACLE]["color"][
+                    idx
+                ],
+                entity_id=entity_id,
+            )
+        elif entity_type == EntityType.CIRCLE_OBSTACLE:
+            return CircleObstacle(
+                position=self._positions[idx].copy(),
+                radius=float(
+                    self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][idx]
+                ),
+                color=self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][idx],
+                entity_id=entity_id,
+            )
+
+        return None
+
+    def update_entity_from_object(self, entity: Entity) -> bool:
+        """Update arrays from modified entity object."""
+        if entity.id not in self._id_to_index:
+            return False
+
+        idx = self._id_to_index[entity.id]
+
+        # Update arrays from entity object
+        if isinstance(entity, Ball):
+            self._positions[idx] = entity.position
+            self._velocities[idx] = entity.velocity
+            self._masses[idx] = entity.mass
+            self._restitutions[idx] = entity.restitution
+            self._drag_coeffs[idx] = entity.drag_coefficient
+            self._cross_sections[idx] = entity.cross_sectional_area
+            self._type_properties[EntityType.BALL]["radius"][idx] = entity.radius
+            self._type_properties[EntityType.BALL]["color"][idx] = entity.color
+        elif isinstance(entity, RectangleObstacle):
+            self._positions[idx] = entity.position
+            self._type_properties[EntityType.RECTANGLE_OBSTACLE]["width"][idx] = (
+                entity.width
+            )
+            self._type_properties[EntityType.RECTANGLE_OBSTACLE]["height"][idx] = (
+                entity.height
+            )
+            self._type_properties[EntityType.RECTANGLE_OBSTACLE]["color"][idx] = (
+                entity.color
+            )
+        elif isinstance(entity, CircleObstacle):
+            self._positions[idx] = entity.position
+            self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][idx] = (
+                entity.radius
+            )
+            self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][idx] = (
+                entity.color
+            )
+        else:
+            return False
+
+        return True
 
     # Internal array access for entity views
     def _get_position(self, idx: int) -> np.ndarray:

@@ -1,6 +1,8 @@
 import arcade.gui
 import numpy as np
 
+from physics_sim.core import Entity
+
 
 class EntityEditorPanel:
     """Persistent entity editor panel for adding/editing entities."""
@@ -14,6 +16,7 @@ class EntityEditorPanel:
         self.editor_input_fields: dict[str, arcade.gui.UIInputText] = {}
         self.editor_color_buttons: dict[str, arcade.gui.UIFlatButton] = {}
         self.editor_current_colors: dict[str, tuple[int, int, int]] = {}
+        self.editor_vector_fields: dict[str, arcade.gui.UIInputText] = {}
 
         self.layout = arcade.gui.UIBoxLayout(space_between=5, vertical=True)
         self.on_save = None
@@ -25,6 +28,7 @@ class EntityEditorPanel:
         self.editor_input_fields.clear()
         self.editor_color_buttons.clear()
         self.editor_current_colors.clear()
+        self.editor_vector_fields.clear()
 
         title = arcade.gui.UILabel(
             text="Entity Editor",
@@ -47,6 +51,7 @@ class EntityEditorPanel:
         self.editor_input_fields.clear()
         self.editor_color_buttons.clear()
         self.editor_current_colors.clear()
+        self.editor_vector_fields.clear()
 
         if not self.entity_class:
             return
@@ -60,11 +65,8 @@ class EntityEditorPanel:
         self.layout.add(title)
         self.layout.add(arcade.gui.UISpace(height=5))
 
-        # Get parameters
-        temp = self.entity_class(
-            position=np.array([0.0, 0.0]), velocity=np.array([0.0, 0.0])
-        )
-        self.editor_parameters = temp.get_settable_parameters()
+        # Get default parameters from class method
+        self.editor_parameters = self.entity_class.get_default_parameters()
 
         # Add input fields
         for param_name, param_meta in self.editor_parameters.items():
@@ -74,6 +76,8 @@ class EntityEditorPanel:
 
             if param_type == "color":
                 self._add_color_field(param_name, label, default)
+            elif param_type == "vector":
+                self._add_vector_field(param_name, label, default)
             else:
                 self._add_input_field(param_name, label, default)
 
@@ -83,6 +87,7 @@ class EntityEditorPanel:
         self.editor_input_fields.clear()
         self.editor_color_buttons.clear()
         self.editor_current_colors.clear()
+        self.editor_vector_fields.clear()
 
         if not self.entity_instance:
             return
@@ -107,6 +112,8 @@ class EntityEditorPanel:
 
             if param_type == "color":
                 self._add_color_field(param_name, label, default)
+            elif param_type == "vector":
+                self._add_vector_field(param_name, label, default)
             else:
                 self._add_input_field(param_name, label, default)
 
@@ -173,6 +180,31 @@ class EntityEditorPanel:
 
         self.layout.add(field_box)
 
+    def _add_vector_field(self, param_name: str, label: str, default_value: list):
+        """Add a vector field for [x, y] input."""
+        field_box = arcade.gui.UIBoxLayout(space_between=2, vertical=True)
+
+        lbl = arcade.gui.UILabel(
+            text=label,
+            font_size=9,
+            text_color=arcade.color.DARK_GRAY,
+        )
+        field_box.add(lbl)
+
+        # Format as [x, y]
+        if isinstance(default_value, (list, tuple)):
+            text_value = f"[{default_value[0]}, {default_value[1]}]"
+        else:
+            text_value = str(default_value)
+
+        inp = arcade.gui.UIInputText(
+            text=text_value, width=self.button_width, height=25
+        )
+        self.editor_vector_fields[param_name] = inp
+        field_box.add(inp)
+
+        self.layout.add(field_box)
+
     def _on_color_click(self, event, param_name: str):
         """Cycle through colors."""
         r, g, b = self.editor_current_colors[param_name]
@@ -215,6 +247,8 @@ class EntityEditorPanel:
     def get_parameters(self) -> dict[str, object]:
         """Get current parameter values."""
         data: dict[str, object] = {}
+
+        # Parse regular input fields
         for name, field in self.editor_input_fields.items():
             meta = self.editor_parameters[name]
             typ = meta.get("type")
@@ -224,9 +258,42 @@ class EntityEditorPanel:
                 data[name] = int(field.text)
             else:
                 data[name] = field.text
+
+        # Parse color fields
         for name, color in self.editor_current_colors.items():
             data[name] = color
+
+        # Parse vector fields
+        for name, field in self.editor_vector_fields.items():
+            # Parse "[x, y]" format
+            text = field.text.strip()
+            if text.startswith("[") and text.endswith("]"):
+                text = text[1:-1]
+            parts = [float(x.strip()) for x in text.split(",")]
+            data[name] = parts
+
         return data
+
+    def get_entity_object(self, position: np.ndarray) -> Entity | None:
+        """Build and return a fully constructed entity.
+
+        Args:
+            position: Position for the entity (from click location)
+
+        Returns:
+            Fully constructed entity ready to add to engine, or None
+        """
+        params = self.get_parameters()
+
+        if self.mode == "add" and self.entity_class:
+            # Create new entity using constructor
+            return self.entity_class(position=position, **params)
+        elif self.mode == "edit" and self.entity_instance:
+            # Update existing entity instance
+            self.entity_instance.update_physics_data(params)
+            return self.entity_instance
+
+        return None
 
     def get_layout(self) -> arcade.gui.UIBoxLayout:
         """Get the widget layout."""

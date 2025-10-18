@@ -85,3 +85,55 @@ class PhysicsEngine(ABC):
             List of entity classes (e.g., [Ball, Obstacle])
         """
         pass
+
+    @abstractmethod
+    def get_render_data(self) -> list[dict]:
+        """Get rendering data for all entities.
+
+        Returns:
+            List of dicts with:
+                - id: entity ID
+                - type: EntityType enum or string
+                - position: (x, y) tuple
+                - render_type: 'circle', 'rectangle', etc.
+                - type-specific: radius, width, height, color, etc.
+        """
+        pass
+
+    @abstractmethod
+    def get_inventory_data(self) -> list[dict]:
+        """Get detailed physics data for UI display.
+
+        Returns:
+            List of dicts with full physics info:
+                - id, type, mass, position, velocity, speed
+                - acceleration, forces, etc.
+        """
+        pass
+
+    @abstractmethod
+    def get_entity_for_editing(self, entity_id: str) -> Entity | None:
+        """Create temporary entity object for editing.
+
+        Returns entity object populated from array data.
+        User can modify it, then call update_entity_from_object().
+
+        Args:
+            entity_id: ID of entity to edit
+
+        Returns:
+            Temporary entity object or None if not found
+        """
+        pass
+
+    @abstractmethod
+    def update_entity_from_object(self, entity: Entity) -> bool:
+        """Update array data from modified entity object.
+
+        Args:
+            entity: Modified entity object
+
+        Returns:
+            True if successful, False otherwise
+        """
+        pass

@@ -6,13 +6,13 @@ class ShapeRendererMixin:
 
     def _render_entity(self, render_data: dict) -> None:
         """Render a single entity based on its render data."""
-        entity_type = render_data.get("type")
+        render_type = render_data.get("render_type", render_data.get("type"))
 
-        if entity_type == "circle":
+        if render_type == "circle":
             self._render_circle(render_data)
-        elif entity_type == "circle_static":
+        elif render_type == "circle_static":
             self._render_circle_static(render_data)
-        elif entity_type == "rectangle":
+        elif render_type == "rectangle":
             self._render_rectangle(render_data)
 
     def _render_circle(self, data: dict) -> None:

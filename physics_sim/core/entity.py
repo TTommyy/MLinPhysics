@@ -15,6 +15,15 @@ class Entity(ABC):
         """Return data needed for rendering this entity."""
         pass
 
+    @classmethod
+    def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
+        """Get default settable parameters for entity creation.
+
+        Returns metadata for editable parameters (excludes position which is set by click).
+        Subclasses should override this to provide their specific parameters.
+        """
+        return {}
+
 
 class PhysicalEntity(Entity):
     """Base class for entities with physical properties."""

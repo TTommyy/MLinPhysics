@@ -154,14 +154,15 @@ class Simulator(arcade.Window):
         self.control_section.on_draw()
         self.inventory_section.on_draw()
 
-        # Render viewport entities
-        entities = self.engine.get_entities()
-        self.viewport_section.render_with_data(entities)
+        # Render viewport entities using data from engine
+        render_data = self.engine.get_render_data()
+        self.viewport_section.render_with_data(render_data)
 
-        # Render inventory with data
+        # Render inventory with physics data
+        inventory_data = self.engine.get_inventory_data()
         engine_name = self.engine.__class__.__name__.replace("PhysicsEngine", "")
         self.inventory_section.render_with_data(
-            entities, self._current_fps, engine_name
+            inventory_data, self._current_fps, engine_name
         )
 
     def on_key_press(self, key: int, modifiers: int):
@@ -236,31 +237,19 @@ class Simulator(arcade.Window):
                 logger.info(f"Add mode active, selected entity type: {entity_class}")
                 if entity_class:
                     try:
-                        # Get parameters from entity editor panel
-                        params = self.control_section.entity_editor.get_parameters()
-                        logger.debug(f"Creating entity with params: {params}")
-
-                        # Extract velocity and mass
-                        velocity_x = params.get("velocity_x", 0.0)
-                        velocity_y = params.get("velocity_y", 0.0)
-                        velocity = np.array([velocity_x, velocity_y])
-                        mass = params.get("mass", 1.0)
-
-                        # Create entity
-                        entity = entity_class(
-                            position=click_pos,
-                            velocity=velocity,
-                            mass=mass,
+                        # Get fully constructed entity from editor
+                        entity = self.control_section.entity_editor.get_entity_object(
+                            click_pos
                         )
 
-                        # Update with remaining parameters
-                        entity.update_physics_data(params)
-
-                        # Add to engine
-                        self.engine.add_entity(entity)
-                        logger.info(
-                            f"Created {entity_class.__name__} at ({phys_x:.2f}, {phys_y:.2f})"
-                        )
+                        if entity:
+                            # Add to engine
+                            self.engine.add_entity(entity)
+                            logger.info(
+                                f"Created {entity_class.__name__} at ({phys_x:.2f}, {phys_y:.2f})"
+                            )
+                        else:
+                            logger.error("Failed to create entity from editor")
                     except Exception as e:
                         logger.error(f"Failed to create entity: {e}")
                 else:
@@ -270,16 +259,19 @@ class Simulator(arcade.Window):
             # In pause mode: allow entity selection
             if self.engine.is_paused():
                 logger.debug("Paused mode: attempting entity selection")
-                entities = self.engine.get_entities()
-                selected = self.entity_selector.select_entity(click_pos, entities)
-                if selected:
-                    entity_type = selected.get_physics_data().get("type", "Entity")
-                    logger.info(f"Entity selected: {entity_type}")
-                    self.control_section.display_controls.set_entity_selected(
-                        True, entity_type
-                    )
-                    # Load entity into editor for editing
-                    self.control_section.entity_editor.set_entity_instance(selected)
+                render_data = self.engine.get_render_data()
+                selected_id = self.entity_selector.select_entity(click_pos, render_data)
+                if selected_id:
+                    # Get entity for editing
+                    entity = self.engine.get_entity_for_editing(selected_id)
+                    if entity:
+                        entity_type = entity.__class__.__name__
+                        logger.info(f"Entity selected: {entity_type}")
+                        self.control_section.display_controls.set_entity_selected(
+                            True, entity_type
+                        )
+                        # Load entity into editor for editing
+                        self.control_section.entity_editor.set_entity_instance(entity)
                 else:
                     logger.debug("No entity selected at click position")
                     self.control_section.display_controls.set_entity_selected(False)
@@ -407,10 +399,12 @@ class Simulator(arcade.Window):
 
     def _on_edit_entity_button(self):
         """Handle edit entity button click."""
-        entity = self.entity_selector.get_selected_entity()
-        if entity:
-            logger.info(f"Loading entity for editing: {entity.__class__.__name__}")
-            self.control_section.entity_editor.set_entity_instance(entity)
+        entity_id = self.entity_selector.get_selected_entity()
+        if entity_id:
+            entity = self.engine.get_entity_for_editing(entity_id)
+            if entity:
+                logger.info(f"Loading entity for editing: {entity.__class__.__name__}")
+                self.control_section.entity_editor.set_entity_instance(entity)
 
     def _on_entity_editor_save(self, params: dict):
         """Handle save from entity editor panel.
@@ -422,8 +416,14 @@ class Simulator(arcade.Window):
         entity = self.control_section.entity_editor.entity_instance
         if entity:
             try:
+                # Update entity object from params
                 entity.update_physics_data(params)
-                logger.info(f"Entity updated: {entity.__class__.__name__}")
+                # Update arrays in engine from modified entity object
+                success = self.engine.update_entity_from_object(entity)
+                if success:
+                    logger.info(f"Entity updated: {entity.__class__.__name__}")
+                else:
+                    logger.error("Failed to update entity in engine")
             except Exception as e:
                 logger.error(f"Failed to update entity: {e}")
 

@@ -17,7 +17,7 @@ class Ball(PhysicalEntity):
         self,
         position: np.ndarray,
         velocity: np.ndarray,
-        radius: float = 0.2,
+        radius: float = 0.5,
         mass: float = 1.0,
         color: tuple[int, int, int] = (255, 0, 0),
         restitution: float = 1.0,
@@ -128,6 +128,43 @@ class Ball(PhysicalEntity):
         })
         return data
 
+    @classmethod
+    def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
+        """Get default settable parameters for Ball creation."""
+        return {
+            "radius": {
+                "type": "float",
+                "default": 0.5,
+                "min": 0.1,
+                "max": 2.0,
+                "label": "Radius",
+            },
+            "mass": {
+                "type": "float",
+                "default": 1.0,
+                "min": 0.1,
+                "max": 100.0,
+                "label": "Mass (kg)",
+            },
+            "velocity": {
+                "type": "vector",
+                "default": [0.0, 0.0],
+                "label": "Velocity (m/s)",
+            },
+            "restitution": {
+                "type": "float",
+                "default": 1.0,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Restitution",
+            },
+            "color": {
+                "type": "color",
+                "default": (255, 0, 0),
+                "label": "Color",
+            },
+        }
+
     def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
         """Get metadata for all editable Ball parameters."""
         return {
@@ -145,15 +182,10 @@ class Ball(PhysicalEntity):
                 "max": 100.0,
                 "label": "Mass (kg)",
             },
-            "velocity_x": {
-                "type": "float",
-                "default": self.velocity.x,
-                "label": "Velocity X (m/s)",
-            },
-            "velocity_y": {
-                "type": "float",
-                "default": self.velocity.y,
-                "label": "Velocity Y (m/s)",
+            "velocity": {
+                "type": "vector",
+                "default": self.velocity.tolist(),
+                "label": "Velocity (m/s)",
             },
             "restitution": {
                 "type": "float",
@@ -176,14 +208,8 @@ class Ball(PhysicalEntity):
                 self.radius = float(config["radius"])
             if "mass" in config:
                 self.mass = float(config["mass"])
-            if "velocity_x" in config or "velocity_y" in config:
-                if isinstance(self.velocity, np.ndarray):
-                    vx = float(config.get("velocity_x", self.velocity[0]))
-                    vy = float(config.get("velocity_y", self.velocity[1]))
-                else:
-                    vx = float(config.get("velocity_x", self.velocity.x))
-                    vy = float(config.get("velocity_y", self.velocity.y))
-                self.velocity = np.array([vx, vy])
+            if "velocity" in config:
+                self.velocity = np.array(config["velocity"])
             if "restitution" in config:
                 self.restitution = float(config["restitution"])
             if "color" in config:

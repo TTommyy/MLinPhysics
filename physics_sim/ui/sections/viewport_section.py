@@ -1,6 +1,6 @@
 import arcade
 
-from physics_sim.core import Entity, LayoutRegion
+from physics_sim.core import LayoutRegion
 from physics_sim.rendering import ArcadeRenderer
 from physics_sim.ui.sections.base_section import BaseSection
 
@@ -26,13 +26,16 @@ class ViewportSection(BaseSection):
         self.draw_background()
         # Renderer handles grid and entities
 
-    def render_with_data(self, entities: list[Entity]):
-        """Render simulation entities.
+    def render_with_data(self, render_data: list[dict]):
+        """Render simulation entities from data dicts.
 
         This is called from Simulator during on_draw.
+
+        Args:
+            render_data: List of entity data dicts from engine
         """
         self.renderer.render_grid()
-        self.renderer.render_entities(entities)
+        self.renderer.render_entities(render_data)
 
     def on_update(self, delta_time: float):
         """Update section."""

@@ -15,7 +15,6 @@ def test_engine_performance(n_balls: int, n_steps: int = 600):
 
     # Create engine
     engine = NumpyPhysicsEngine(
-        gravity=np.array([0.0, -9.81]),
         bounds=(20.0, 15.0),
     )
 

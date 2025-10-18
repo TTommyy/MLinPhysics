@@ -54,6 +54,68 @@ class RectangleObstacle(Entity):
         }
 
     @classmethod
+    def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
+        """Get default settable parameters for RectangleObstacle creation."""
+        return {
+            "width": {
+                "type": "float",
+                "default": 2.0,
+                "min": 0.1,
+                "max": 10.0,
+                "label": "Width",
+            },
+            "height": {
+                "type": "float",
+                "default": 2.0,
+                "min": 0.1,
+                "max": 10.0,
+                "label": "Height",
+            },
+            "color": {
+                "type": "color",
+                "default": (100, 100, 100),
+                "label": "Color",
+            },
+        }
+
+    def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
+        """Get metadata for all editable RectangleObstacle parameters."""
+        return {
+            "width": {
+                "type": "float",
+                "default": self.width,
+                "min": 0.1,
+                "max": 10.0,
+                "label": "Width",
+            },
+            "height": {
+                "type": "float",
+                "default": self.height,
+                "min": 0.1,
+                "max": 10.0,
+                "label": "Height",
+            },
+            "color": {
+                "type": "color",
+                "default": self.color,
+                "label": "Color",
+            },
+        }
+
+    def update_physics_data(self, config: dict[str, Any]) -> bool:
+        """Update obstacle parameters from config dict."""
+        try:
+            if "width" in config:
+                self.width = float(config["width"])
+            if "height" in config:
+                self.height = float(config["height"])
+            if "color" in config:
+                self.color = config["color"]
+            return True
+        except (ValueError, TypeError):
+            return False
+
+    @classmethod
     def create_wall(
         cls,
         x: float,
@@ -120,3 +182,49 @@ class CircleObstacle(Entity):
             "radius": self.radius,
             "color": self.color,
         }
+
+    @classmethod
+    def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
+        """Get default settable parameters for CircleObstacle creation."""
+        return {
+            "radius": {
+                "type": "float",
+                "default": 1.0,
+                "min": 0.1,
+                "max": 5.0,
+                "label": "Radius",
+            },
+            "color": {
+                "type": "color",
+                "default": (100, 100, 100),
+                "label": "Color",
+            },
+        }
+
+    def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
+        """Get metadata for all editable CircleObstacle parameters."""
+        return {
+            "radius": {
+                "type": "float",
+                "default": self.radius,
+                "min": 0.1,
+                "max": 5.0,
+                "label": "Radius",
+            },
+            "color": {
+                "type": "color",
+                "default": self.color,
+                "label": "Color",
+            },
+        }
+
+    def update_physics_data(self, config: dict[str, Any]) -> bool:
+        """Update obstacle parameters from config dict."""
+        try:
+            if "radius" in config:
+                self.radius = float(config["radius"])
+            if "color" in config:
+                self.color = config["color"]
+            return True
+        except (ValueError, TypeError):
+            return False

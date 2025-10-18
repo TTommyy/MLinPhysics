@@ -1,7 +1,7 @@
 import arcade
 import arcade.gui
 
-from physics_sim.core import LayoutRegion, PhysicalEntity
+from physics_sim.core import LayoutRegion
 
 
 class InventoryPanel:
@@ -77,11 +77,13 @@ class InventoryPanel:
             10,
         )
 
-    def render(self, entities: list, fps: float = 0.0, engine_name: str = ""):
+    def render(
+        self, inventory_data: list[dict], fps: float = 0.0, engine_name: str = ""
+    ):
         """Render the inventory panel with entity data and debug info.
 
         Args:
-            entities: List of entities to display
+            inventory_data: List of entity data dicts from engine
             fps: Current frames per second
             engine_name: Name of the physics engine
         """
@@ -111,7 +113,7 @@ class InventoryPanel:
             # Update debug text content
             self.debug_fps_text.text = f"FPS: {fps:.1f}"
             self.debug_engine_text.text = f"Engine: {engine_name}"
-            entity_count = len([e for e in entities if isinstance(e, PhysicalEntity)])
+            entity_count = len(inventory_data)
             self.debug_entities_text.text = f"Entities: {entity_count}"
 
             # Update positions
@@ -148,7 +150,7 @@ class InventoryPanel:
         self.title_text.draw()
 
         # Update and draw count
-        entity_count = len([e for e in entities if isinstance(e, PhysicalEntity)])
+        entity_count = len(inventory_data)
         self.count_text.text = f"{entity_count} entities"
         self.count_text.y = title_y - 25
         self.count_text.draw()
@@ -158,16 +160,13 @@ class InventoryPanel:
         y_offset = entity_start_y + self.scroll_offset
         line_height = 16
 
-        for entity in entities:
-            if not isinstance(entity, PhysicalEntity):
-                continue
-
+        for data in inventory_data:
             # Skip if scrolled out of view
             if y_offset < -100 or y_offset > self.screen_height:
-                y_offset -= self._get_entity_display_height(entity, line_height)
+                y_offset -= self._get_entity_display_height_from_data(data, line_height)
                 continue
 
-            y_offset = self._render_entity_data(entity, y_offset, line_height)
+            y_offset = self._render_entity_data_from_dict(data, y_offset, line_height)
 
         # Calculate max scroll
         total_height = abs(y_offset - entity_start_y)
@@ -176,18 +175,13 @@ class InventoryPanel:
         )
 
         # Clean up Text objects for entities that no longer exist
-        current_entity_ids = {
-            entity.id for entity in entities if isinstance(entity, PhysicalEntity)
-        }
+        current_entity_ids = {data["id"] for data in inventory_data}
         stale_ids = set(self.entity_text_cache.keys()) - current_entity_ids
         for stale_id in stale_ids:
             del self.entity_text_cache[stale_id]
 
-    def _get_entity_display_height(
-        self, entity: PhysicalEntity, line_height: int
-    ) -> int:
-        """Calculate display height for an entity."""
-        data = entity.get_physics_data()
+    def _get_entity_display_height_from_data(self, data: dict, line_height: int) -> int:
+        """Calculate display height for an entity from data dict."""
         base_lines = (
             7  # ID, type, mass, position, velocity, acceleration, forces header
         )
@@ -216,20 +210,19 @@ class InventoryPanel:
             }
         return self.entity_text_cache[entity_id]
 
-    def _render_entity_data(
-        self, entity: PhysicalEntity, y_offset: float, line_height: int
+    def _render_entity_data_from_dict(
+        self, data: dict, y_offset: float, line_height: int
     ) -> float:
-        """Render data for a single entity using Text objects.
+        """Render data for a single entity from data dict using Text objects.
 
         Args:
-            entity: Entity to render
+            data: Entity data dict from engine
             y_offset: Current Y position
             line_height: Height per line
 
         Returns:
             Updated Y offset
         """
-        data = entity.get_physics_data()
         x = self.panel_x + 15
         entity_id = data["id"]
 

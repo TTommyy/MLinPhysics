@@ -1,6 +1,6 @@
 import arcade
 
-from physics_sim.core import Entity, LayoutRegion, Renderer
+from physics_sim.core import LayoutRegion, Renderer
 
 from ._grid_renderer_mixin import GridRendererMixin
 from ._pause_manager_mixin import PauseManagerMixin
@@ -58,11 +58,10 @@ class ArcadeRenderer(
         arcade.start_render()
         arcade.set_background_color(arcade.color.WHITE)
 
-    def render_entities(self, entities: list[Entity]) -> None:
-        """Render all entities in the simulation."""
-        for entity in entities:
-            render_data = entity.get_render_data()
-            self._render_entity(render_data)
+    def render_entities(self, render_data: list[dict]) -> None:
+        """Render entities from data dicts (not entity objects)."""
+        for data in render_data:
+            self._render_entity(data)
 
     def render_ui(self, ui_elements: list) -> None:
         """Render UI elements (panels, buttons, etc.)."""

@@ -4,9 +4,10 @@ import arcade.gui
 class EngineControls:
     """Widget group for physics engine selection."""
 
-    def __init__(self, initial_engine: str = "numpy"):
+    def __init__(self, initial_engine: str = "numpy", button_width: int = 220):
         self.selected_engine = initial_engine
         self.on_engine_change = None
+        self.button_width = button_width
 
         self.layout = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
         self._build()
@@ -24,7 +25,7 @@ class EngineControls:
         # Engine toggle button
         self.engine_button = arcade.gui.UIFlatButton(
             text=self.selected_engine.upper(),
-            width=220,
+            width=self.button_width,
             height=35,
         )
         self.engine_button.on_click = self._toggle_engine

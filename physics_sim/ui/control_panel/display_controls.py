@@ -4,9 +4,10 @@ import arcade.gui
 class DisplayControls:
     """Widget group for display and simulation controls."""
 
-    def __init__(self):
+    def __init__(self, button_width: int = 220):
         self.is_paused = False
         self.entity_selected = False
+        self.button_width = button_width
 
         self.on_grid_toggle = None
         self.on_pause_toggle = None
@@ -28,7 +29,7 @@ class DisplayControls:
         # Grid toggle
         self.grid_button = arcade.gui.UIFlatButton(
             text="Grid: ON",
-            width=220,
+            width=self.button_width,
             height=35,
         )
         self.grid_button.on_click = self._toggle_grid
@@ -37,7 +38,7 @@ class DisplayControls:
         # Pause toggle
         self.pause_button = arcade.gui.UIFlatButton(
             text="Pause: OFF",
-            width=220,
+            width=self.button_width,
             height=35,
         )
         self.pause_button.on_click = self._toggle_pause
@@ -46,7 +47,7 @@ class DisplayControls:
         # Edit entity button
         self.edit_button = arcade.gui.UIFlatButton(
             text="Edit Entity",
-            width=220,
+            width=self.button_width,
             height=35,
         )
         self.edit_button.on_click = self._on_edit_entity_button

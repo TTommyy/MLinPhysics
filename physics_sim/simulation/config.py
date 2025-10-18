@@ -51,15 +51,35 @@ class SimulationConfig:
 
     @classmethod
     def from_screen_size(cls, width: int, height: int) -> "SimulationConfig":
-        """Create config maintaining aspect ratio from screen dimensions."""
-        sim_min_width = 10.0
-        aspect_ratio = width / height
+        """Create config maintaining aspect ratio from screen dimensions.
+
+        This method calculates the simulation dimensions based on the actual
+        viewport region size (after accounting for control panels), not the
+        full screen size.
+        """
+        # Use default layout percentages
+        control_panel_width_pct = 0.15
+        inventory_panel_width_pct = 0.15
+        viewport_height_pct = 0.60
+
+        # Calculate actual viewport dimensions
+        control_width = int(width * control_panel_width_pct)
+        inventory_width = int(width * inventory_panel_width_pct)
+        viewport_width = width - control_width - inventory_width
+        viewport_height = int(height * viewport_height_pct)
+
+        # Calculate simulation dimensions based on viewport aspect ratio
+        sim_min_width = 100.0
+        viewport_aspect_ratio = viewport_width / viewport_height
         sim_width = sim_min_width
-        sim_height = sim_min_width / aspect_ratio
+        sim_height = sim_min_width / viewport_aspect_ratio
 
         return cls(
             screen_width=width,
             screen_height=height,
             sim_width=sim_width,
             sim_height=sim_height,
+            control_panel_width_pct=control_panel_width_pct,
+            inventory_panel_width_pct=inventory_panel_width_pct,
+            viewport_height_pct=viewport_height_pct,
         )

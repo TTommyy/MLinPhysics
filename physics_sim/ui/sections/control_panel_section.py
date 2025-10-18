@@ -20,10 +20,13 @@ class ControlPanelSection(BaseSection):
         # UI Manager
         self.ui_manager = arcade.gui.UIManager()
 
+        # Calculate button width from region (with padding)
+        button_width = max(120, region.width - 50)
+
         # Widget components
-        self.engine_controls = EngineControls(initial_engine)
-        self.placement_controls = PlacementControls()
-        self.display_controls = DisplayControls()
+        self.engine_controls = EngineControls(initial_engine, button_width)
+        self.placement_controls = PlacementControls(button_width)
+        self.display_controls = DisplayControls(button_width)
         self.status_display = StatusDisplay()
 
         self._setup_ui()

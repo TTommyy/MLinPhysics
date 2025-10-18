@@ -4,10 +4,11 @@ import arcade.gui
 class PlacementControls:
     """Widget group for entity placement controls."""
 
-    def __init__(self):
+    def __init__(self, button_width: int = 220):
         self.add_mode = False
         self.available_entity_types: list[type] = []
         self.selected_entity_type_index = 0
+        self.button_width = button_width
 
         self.on_add_mode_toggle = None
         self.on_object_type_change = None
@@ -28,7 +29,7 @@ class PlacementControls:
         # Add mode toggle
         self.add_mode_button = arcade.gui.UIFlatButton(
             text="Add Mode: OFF",
-            width=220,
+            width=self.button_width,
             height=35,
         )
         self.add_mode_button.on_click = self._toggle_add_mode
@@ -37,7 +38,7 @@ class PlacementControls:
         # Object type selector
         self.object_type_button = arcade.gui.UIFlatButton(
             text="Type: (no engine)",
-            width=220,
+            width=self.button_width,
             height=35,
         )
         self.object_type_button.on_click = self._cycle_object_type

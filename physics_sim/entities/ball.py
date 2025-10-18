@@ -1,7 +1,9 @@
 import math
 from typing import Any
 
-from physics_sim.core import PhysicalEntity, Vector2D
+import numpy as np
+
+from physics_sim.core import PhysicalEntity
 
 
 class Ball(PhysicalEntity):
@@ -13,8 +15,8 @@ class Ball(PhysicalEntity):
 
     def __init__(
         self,
-        position: Vector2D,
-        velocity: Vector2D,
+        position: np.ndarray,
+        velocity: np.ndarray,
         radius: float = 0.2,
         mass: float = 1.0,
         color: tuple[int, int, int] = (255, 0, 0),
@@ -24,8 +26,8 @@ class Ball(PhysicalEntity):
     ):
         """
         Args:
-            position: Initial position vector
-            velocity: Initial velocity vector
+            position: Initial position as np.ndarray([x, y]) or Vector2D (for compat)
+            velocity: Initial velocity as np.ndarray([x, y]) or Vector2D (for compat)
             radius: Ball radius in simulation units
             mass: Ball mass (affects physics interactions)
             color: RGB color tuple (0-255 each)
@@ -38,7 +40,7 @@ class Ball(PhysicalEntity):
         self.restitution = restitution
         self._drag_coefficient = drag_coefficient
         self._drag_enabled = True
-        self._acceleration = Vector2D(0, 0)
+        self._acceleration = np.array([0.0, 0.0])
         self._cross_sectional_area = self._calcualate_cross_sectional_area()
 
     @property
@@ -62,23 +64,28 @@ class Ball(PhysicalEntity):
     def cross_sectional_area(self) -> float:
         return self._cross_sectional_area
 
-    def apply_force(self, force: Vector2D):
+    def apply_force(self, force: np.ndarray):
         """Apply a force using F = ma."""
         self._acceleration = self._acceleration + (force / self.mass)
 
     def reset_acceleration(self):
         """Reset accumulated acceleration (called after integration)."""
-        self._acceleration = Vector2D(0, 0)
+        self._acceleration = np.array([0.0, 0.0])
 
-    def get_acceleration(self) -> Vector2D:
+    def get_acceleration(self) -> np.ndarray:
         """Get current acceleration."""
         return self._acceleration
 
     def get_render_data(self) -> dict[str, Any]:
         """Return rendering information for this ball."""
+        if isinstance(self.position, np.ndarray):
+            position_tuple = tuple(self.position)
+        else:
+            position_tuple = self.position.to_tuple()
+
         return {
             "type": "circle",
-            "position": self.position.to_tuple(),
+            "position": position_tuple,
             "radius": self.radius,
             "color": self.color,
         }
@@ -86,21 +93,37 @@ class Ball(PhysicalEntity):
     def get_physics_data(self) -> dict[str, Any]:
         """Get detailed physics data including ball-specific properties."""
         data = super().get_physics_data()
+
+        if isinstance(self._acceleration, np.ndarray):
+            acceleration_tuple = tuple(self._acceleration)
+            acceleration_magnitude = float(np.linalg.norm(self._acceleration))
+        else:
+            acceleration_tuple = self._acceleration.to_tuple()
+            acceleration_magnitude = self._acceleration.magnitude()
+
         data.update({
             "type": "Ball",
             "radius": self.radius,
-            "acceleration": self._acceleration.to_tuple(),
-            "acceleration_magnitude": self._acceleration.magnitude(),
+            "acceleration": acceleration_tuple,
+            "acceleration_magnitude": acceleration_magnitude,
             "restitution": self.restitution,
         })
         return data
 
     def get_config_data(self) -> dict[str, Any]:
         data = super().get_physics_data()
+
+        if isinstance(self._acceleration, np.ndarray):
+            acceleration_tuple = tuple(self._acceleration)
+            acceleration_magnitude = float(np.linalg.norm(self._acceleration))
+        else:
+            acceleration_tuple = self._acceleration.to_tuple()
+            acceleration_magnitude = self._acceleration.magnitude()
+
         data.update({
             "radius": self.radius,
-            "acceleration": self._acceleration.to_tuple(),
-            "acceleration_magnitude": self._acceleration.magnitude(),
+            "acceleration": acceleration_tuple,
+            "acceleration_magnitude": acceleration_magnitude,
             "restitution": self.restitution,
         })
         return data
@@ -154,9 +177,13 @@ class Ball(PhysicalEntity):
             if "mass" in config:
                 self.mass = float(config["mass"])
             if "velocity_x" in config or "velocity_y" in config:
-                vx = float(config.get("velocity_x", self.velocity.x))
-                vy = float(config.get("velocity_y", self.velocity.y))
-                self.velocity = Vector2D(vx, vy)
+                if isinstance(self.velocity, np.ndarray):
+                    vx = float(config.get("velocity_x", self.velocity[0]))
+                    vy = float(config.get("velocity_y", self.velocity[1]))
+                else:
+                    vx = float(config.get("velocity_x", self.velocity.x))
+                    vy = float(config.get("velocity_y", self.velocity.y))
+                self.velocity = np.array([vx, vy])
             if "restitution" in config:
                 self.restitution = float(config["restitution"])
             if "color" in config:
@@ -168,13 +195,13 @@ class Ball(PhysicalEntity):
     @classmethod
     def create_cannonball(
         cls,
-        position: Vector2D | None = None,
-        velocity: Vector2D | None = None,
+        position: np.ndarray | None = None,
+        velocity: np.ndarray | None = None,
     ) -> "Ball":
         """Factory method: Create a red cannonball with default properties."""
         return cls(
-            position=position or Vector2D(0.2, 0.2),
-            velocity=velocity or Vector2D(10.0, 10.0),
+            position=position if position is not None else np.array([0.2, 0.2]),
+            velocity=velocity if velocity is not None else np.array([10.0, 10.0]),
             radius=0.2,
             mass=1.0,
             color=(255, 0, 0),
@@ -188,14 +215,14 @@ class Ball(PhysicalEntity):
 
         width, height = bounds
         return cls(
-            position=Vector2D(
+            position=np.array([
                 random.uniform(0.5, width - 0.5),
                 random.uniform(0.5, height - 0.5),
-            ),
-            velocity=Vector2D(
+            ]),
+            velocity=np.array([
                 random.uniform(-5, 5),
                 random.uniform(-5, 5),
-            ),
+            ]),
             radius=random.uniform(0.1, 0.3),
             mass=1.0,
             color=(

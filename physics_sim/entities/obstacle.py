@@ -1,6 +1,8 @@
 from typing import Any
 
-from physics_sim.core import Entity, Vector2D
+import numpy as np
+
+from physics_sim.core import Entity
 
 
 class RectangleObstacle(Entity):
@@ -11,7 +13,7 @@ class RectangleObstacle(Entity):
 
     def __init__(
         self,
-        position: Vector2D,
+        position: np.ndarray | Any,
         width: float,
         height: float,
         color: tuple[int, int, int] = (100, 100, 100),
@@ -19,14 +21,18 @@ class RectangleObstacle(Entity):
     ):
         """
         Args:
-            position: Center position of the obstacle
+            position: Center position as np.ndarray([x, y]) or Vector2D (for compat)
             width: Width of the rectangle
             height: Height of the rectangle
             color: RGB color tuple (0-255 each)
             entity_id: Optional unique identifier
         """
         super().__init__(entity_id)
-        self.position = position
+        # Accept both numpy arrays and Vector2D for backward compatibility
+        if hasattr(position, "x"):
+            self.position = np.array([position.x, position.y])
+        else:
+            self.position = position
         self.width = width
         self.height = height
         self.color = color
@@ -34,9 +40,14 @@ class RectangleObstacle(Entity):
 
     def get_render_data(self) -> dict[str, Any]:
         """Return rendering information for this obstacle."""
+        if isinstance(self.position, np.ndarray):
+            position_tuple = tuple(self.position)
+        else:
+            position_tuple = self.position.to_tuple()
+
         return {
             "type": "rectangle",
-            "position": self.position.to_tuple(),
+            "position": position_tuple,
             "width": self.width,
             "height": self.height,
             "color": self.color,
@@ -59,7 +70,7 @@ class RectangleObstacle(Entity):
             height: Wall height
         """
         return cls(
-            position=Vector2D(x, y),
+            position=np.array([x, y]),
             width=width,
             height=height,
             color=(80, 80, 80),
@@ -74,29 +85,38 @@ class CircleObstacle(Entity):
 
     def __init__(
         self,
-        position: Vector2D,
+        position: np.ndarray | Any,
         radius: float,
         color: tuple[int, int, int] = (100, 100, 100),
         entity_id: str | None = None,
     ):
         """
         Args:
-            position: Center position of the obstacle
+            position: Center position as np.ndarray([x, y]) or Vector2D (for compat)
             radius: Radius of the circle
             color: RGB color tuple (0-255 each)
             entity_id: Optional unique identifier
         """
         super().__init__(entity_id)
-        self.position = position
+        # Accept both numpy arrays and Vector2D for backward compatibility
+        if hasattr(position, "x"):
+            self.position = np.array([position.x, position.y])
+        else:
+            self.position = position
         self.radius = radius
         self.color = color
         self.static = True
 
     def get_render_data(self) -> dict[str, Any]:
         """Return rendering information for this obstacle."""
+        if isinstance(self.position, np.ndarray):
+            position_tuple = tuple(self.position)
+        else:
+            position_tuple = self.position.to_tuple()
+
         return {
             "type": "circle_static",
-            "position": self.position.to_tuple(),
+            "position": position_tuple,
             "radius": self.radius,
             "color": self.color,
         }

@@ -27,11 +27,10 @@ def main():
 
     # Print info
     engine = NumpyPhysicsEngine(
-        gravity=config.gravity,
         bounds=(config.sim_width, config.sim_height),
     )
     # Add forces to numpy engine
-    engine.add_force(LinearGravityForce(config.gravity))
+    engine.add_force(LinearGravityForce())
     engine.add_force(DragForce())
     ball = Ball.create_cannonball()
     engine.add_entity(ball)

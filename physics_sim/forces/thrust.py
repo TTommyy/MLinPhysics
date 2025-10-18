@@ -1,4 +1,6 @@
-from physics_sim.core import Entity, Force, PhysicalEntity, Vector2D
+import numpy as np
+
+from physics_sim.core import Entity, Force, PhysicalEntity
 
 
 class ThrustForce(Force):
@@ -16,16 +18,20 @@ class ThrustForce(Force):
         """Thrust applies to entities with thrust capability."""
         return isinstance(entity, PhysicalEntity) and entity.thrust_enabled
 
-    def apply_to(self, entity: Entity, dt: float) -> Vector2D:
+    def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
         """Apply thrust force if enabled."""
         if not isinstance(entity, PhysicalEntity):
-            return Vector2D(0, 0)
+            return np.array([0.0, 0.0])
 
         # Check if thrust is enabled and get thrust vector from entity properties
         if not entity.thrust_enabled:
-            return Vector2D(0, 0)
+            return np.array([0.0, 0.0])
 
-        return entity.thrust_vector
+        thrust = entity.thrust_vector
+        if isinstance(thrust, np.ndarray):
+            return thrust
+        else:
+            return np.array([thrust.x, thrust.y])
 
     def __repr__(self) -> str:
         return "ThrustForce()"

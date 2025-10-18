@@ -2,7 +2,6 @@ from abc import ABC, abstractmethod
 
 from .entity import Entity
 from .force import Force
-from .vector import Vector2D
 
 
 class PhysicsEngine(ABC):
@@ -13,13 +12,12 @@ class PhysicsEngine(ABC):
     the same interface.
     """
 
-    def __init__(self, gravity: Vector2D, bounds: tuple[float, float]):
+    def __init__(self, bounds: tuple[float, float]):
         """
         Args:
-            gravity: Gravity acceleration vector (e.g., Vector2D(0, -10))
+            gravity: Gravity acceleration as np.ndarray([x, y]) or Vector2D (for compat)
             bounds: (width, height) of simulation space
         """
-        self.gravity = gravity
         self.bounds = bounds
         self.forces: list[Force] = []  # List of Force instances
 
@@ -86,8 +84,4 @@ class PhysicsEngine(ABC):
         Returns:
             List of entity classes (e.g., [Ball, Obstacle])
         """
-        pass
-
-    @abstractmethod
-    def get_entities_types(self) -> list[Entity]:
         pass

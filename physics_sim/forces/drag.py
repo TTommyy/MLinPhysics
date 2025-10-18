@@ -2,7 +2,9 @@
 ### Based on: https://en.wikipedia.org/wiki/Drag_(physics)#The_drag_equation
 ####
 
-from physics_sim.core import Entity, Force, PhysicalEntity, Vector2D
+import numpy as np
+
+from physics_sim.core import Entity, Force, PhysicalEntity
 
 
 class DragForce(Force):
@@ -31,16 +33,19 @@ class DragForce(Force):
         """Drag applies to all physical entities (they all have drag_coefficient property)."""
         return isinstance(entity, PhysicalEntity) and entity.drag_enabled
 
-    def apply_to(self, entity: Entity, dt: float) -> Vector2D:
+    def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
         """Calculate drag force based on velocity."""
         if not isinstance(entity, PhysicalEntity):
-            return Vector2D(0, 0)
+            return np.array([0.0, 0.0])
 
         velocity = entity.velocity
-        speed = velocity.magnitude()
+        if isinstance(velocity, np.ndarray):
+            speed = np.linalg.norm(velocity)
+        else:
+            speed = velocity.magnitude()
 
         if speed < 0.001:  # Avoid division by zero
-            return Vector2D(0, 0)
+            return np.array([0.0, 0.0])
 
         # Get entity-specific properties
         drag_coef = entity.drag_coefficient  # C_D (0.47 for sphere)
@@ -50,7 +55,11 @@ class DragForce(Force):
             # Simplified linear drag: F = -k * v
             # Using C_D * A as combined coefficient
             k = drag_coef * cross_section
-            return velocity * (-k)
+            if isinstance(velocity, np.ndarray):
+                return velocity * (-k)
+            else:
+                v_array = np.array([velocity.x, velocity.y])
+                return v_array * (-k)
         else:
             # Full quadratic drag equation: F = -(1/2) * ρ * v² * C_D * A * (v/|v|)
             # Direction: opposite to velocity (v/|v|)
@@ -58,9 +67,61 @@ class DragForce(Force):
             drag_magnitude = (
                 0.5 * self.fluid_density * (speed**2) * drag_coef * cross_section
             )
-            drag_direction = velocity.normalized()
+            if isinstance(velocity, np.ndarray):
+                drag_direction = velocity / speed
+            else:
+                drag_direction = velocity.normalized()
+                drag_direction = np.array([drag_direction.x, drag_direction.y])
             return drag_direction * (-drag_magnitude)
+
+    def apply_to_batch(
+        self,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        masses: np.ndarray,
+        entity_types: np.ndarray,
+        dt: float,
+        **kwargs,
+    ) -> np.ndarray:
+        """Vectorized drag calculation for batch of entities.
+
+        Args:
+            velocities: Velocity vectors, shape (n, 2)
+            kwargs: Must include 'drag_coeffs' and 'cross_sections' arrays
+
+        Returns:
+            Force vectors, shape (n, 2)
+        """
+        drag_coeffs = kwargs.get("drag_coeffs", np.ones(len(velocities)))
+        cross_sections = kwargs.get("cross_sections", np.ones(len(velocities)))
+
+        speeds = np.linalg.norm(velocities, axis=1, keepdims=True)
+
+        # Avoid division by zero
+        mask = speeds[:, 0] > 0.001
+        result = np.zeros_like(velocities)
+
+        if mask.sum() == 0:
+            return result
+
+        if self.linear:
+            # Linear drag: F = -k * v
+            k = drag_coeffs[mask] * cross_sections[mask]
+            result[mask] = velocities[mask] * -k[:, np.newaxis]
+        else:
+            # Quadratic drag: F = -(1/2) * ρ * v² * C_D * A * (v/|v|)
+            magnitude = (
+                0.5
+                * self.fluid_density
+                * (speeds[mask] ** 2)
+                * drag_coeffs[mask, np.newaxis]
+                * cross_sections[mask, np.newaxis]
+            )
+            direction = velocities[mask] / speeds[mask]
+            result[mask] = direction * -magnitude
+
+        return result
 
     def __repr__(self) -> str:
         model = "linear" if self.linear else "quadratic"
-        return f"DragForce(coefficient={self.coefficient}, model={model})"
+        return f"DragForce(fluid_density={self.fluid_density}, model={model})"

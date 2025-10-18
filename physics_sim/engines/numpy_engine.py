@@ -1,143 +1,384 @@
-from physics_sim.core import Entity, PhysicsEngine, Vector2D
-from physics_sim.entities.ball import Ball
+from enum import IntEnum
+
+import numpy as np
+
+from physics_sim.core import Entity, PhysicsEngine
+from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
+
+
+class EntityType(IntEnum):
+    """Entity type enumeration for polymorphic storage."""
+
+    BALL = 0
+    RECTANGLE_OBSTACLE = 1
+    CIRCLE_OBSTACLE = 2
 
 
 class NumpyPhysicsEngine(PhysicsEngine):
-    """Custom physics engine using numpy for calculations.
+    """High-performance physics engine using vectorized numpy operations.
 
-    Implements:
-    - Euler integration for position and velocity
-    - Gravity application
-    - Boundary collision detection and response
+    Uses Structure-of-Arrays (SoA) pattern for maximum performance:
+    - All entity data stored in contiguous numpy arrays
+    - Vectorized operations process all entities simultaneously
+    - Entity objects are lightweight views into arrays
+    - Supports multiple entity types (balls, obstacles)
+    - Extensible to new entity types
 
-    This implementation is educational and demonstrates basic physics
-    simulation concepts from first principles.
+    Performance target: 1000+ dynamic entities at 60 FPS
     """
 
-    def __init__(self, gravity: Vector2D, bounds: tuple[float, float]):
-        super().__init__(gravity, bounds)
-        self._entities: dict[str, Entity] = {}
+    def __init__(self, bounds: tuple[float, float]):
+        super().__init__(bounds)
+
+        # Core arrays (all entities)
+        self._n_entities: int = 0
+        self._capacity: int = 16  # Initial capacity, grows as needed
+
+        # Shared properties for all entities
+        self._positions: np.ndarray = np.zeros((self._capacity, 2), dtype=np.float64)
+        self._entity_types: np.ndarray = np.zeros(self._capacity, dtype=np.int32)
+        self._is_static: np.ndarray = np.zeros(self._capacity, dtype=bool)
+
+        # Dynamic entity properties (used for all entities, but 0 for static)
+        self._dynamic_mask: np.ndarray = np.zeros(self._capacity, dtype=bool)
+        self._velocities: np.ndarray = np.zeros((self._capacity, 2), dtype=np.float64)
+        self._accelerations: np.ndarray = np.zeros(
+            (self._capacity, 2), dtype=np.float64
+        )
+        self._masses: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
+        self._restitutions: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
+        self._drag_coeffs: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
+        self._cross_sections: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
+
+        # Type-specific properties (parallel arrays indexed by entity index)
+        self._type_properties: dict[EntityType, dict] = {
+            EntityType.BALL: {
+                "radius": np.zeros(self._capacity, dtype=np.float64),
+                "color": [None] * self._capacity,
+            },
+            EntityType.RECTANGLE_OBSTACLE: {
+                "width": np.zeros(self._capacity, dtype=np.float64),
+                "height": np.zeros(self._capacity, dtype=np.float64),
+                "color": [None] * self._capacity,
+            },
+            EntityType.CIRCLE_OBSTACLE: {
+                "radius": np.zeros(self._capacity, dtype=np.float64),
+                "color": [None] * self._capacity,
+            },
+        }
+
+        # Entity object views and lookup
+        self._entity_objects: list[Entity] = []
+        self._id_to_index: dict[str, int] = {}
+
+        # Pause state
         self._paused: bool = False
 
+    def _grow_arrays(self, min_additional: int = 1):
+        """Grow all arrays to accommodate more entities."""
+        new_capacity = max(self._capacity * 2, self._capacity + min_additional)
+
+        # Grow shared arrays
+        self._positions = np.resize(self._positions, (new_capacity, 2))
+        self._entity_types = np.resize(self._entity_types, new_capacity)
+        self._is_static = np.resize(self._is_static, new_capacity)
+
+        # Grow dynamic arrays
+        self._dynamic_mask = np.resize(self._dynamic_mask, new_capacity)
+        self._velocities = np.resize(self._velocities, (new_capacity, 2))
+        self._accelerations = np.resize(self._accelerations, (new_capacity, 2))
+        self._masses = np.resize(self._masses, new_capacity)
+        self._restitutions = np.resize(self._restitutions, new_capacity)
+        self._drag_coeffs = np.resize(self._drag_coeffs, new_capacity)
+        self._cross_sections = np.resize(self._cross_sections, new_capacity)
+
+        # Grow type-specific arrays
+        for _, props in self._type_properties.items():
+            for key, arr in props.items():
+                if isinstance(arr, np.ndarray):
+                    props[key] = np.resize(arr, new_capacity)
+                elif isinstance(arr, list):
+                    props[key].extend([None] * (new_capacity - self._capacity))
+
+        self._capacity = new_capacity
+
     def add_entity(self, entity: Entity) -> None:
-        self._entities[entity.id] = entity
+        """Add an entity to the simulation.
+
+        This method accepts both:
+        1. Legacy Entity objects (for backward compatibility)
+        2. Direct entity objects that will be converted to views
+
+        For new code, entities should be created via the engine to be views.
+        """
+        # Check if we need to grow arrays
+        if self._n_entities >= self._capacity:
+            self._grow_arrays()
+
+        idx = self._n_entities
+
+        # Determine entity type and populate arrays
+        if isinstance(entity, Ball):
+            self._add_ball(entity, idx)
+        elif isinstance(entity, RectangleObstacle):
+            self._add_rectangle_obstacle(entity, idx)
+        elif isinstance(entity, CircleObstacle):
+            self._add_circle_obstacle(entity, idx)
+        else:
+            raise ValueError(f"Unsupported entity type: {type(entity)}")
+
+        # Store entity object and create mapping
+        self._entity_objects.append(entity)
+        self._id_to_index[entity.id] = idx
+        self._n_entities += 1
+
+    def _add_ball(self, ball:Ball, idx: int):
+        """Add a Ball entity to arrays."""
+        self._positions[idx] = ball.position
+        self._entity_types[idx] = EntityType.BALL
+        self._is_static[idx] = False
+        self._dynamic_mask[idx] = True
+
+        # Dynamic properties
+        self._velocities[idx] = ball.velocity
+        self._masses[idx] = ball.mass
+        self._restitutions[idx] = ball.restitution
+        self._drag_coeffs[idx] = ball.drag_coefficient
+        self._cross_sections[idx] = ball.cross_sectional_area
+
+        # Ball-specific properties
+        self._type_properties[EntityType.BALL]["radius"][idx] = ball.radius
+        self._type_properties[EntityType.BALL]["color"][idx] = ball.color
+
+    def _add_rectangle_obstacle(self, obstacle, idx: int):
+        """Add a RectangleObstacle entity to arrays."""
+        self._positions[idx] = np.array([
+            obstacle.position.x
+            if hasattr(obstacle.position, "x")
+            else obstacle.position[0],
+            obstacle.position.y
+            if hasattr(obstacle.position, "y")
+            else obstacle.position[1],
+        ])
+        self._entity_types[idx] = EntityType.RECTANGLE_OBSTACLE
+        self._is_static[idx] = True
+        self._dynamic_mask[idx] = False
+
+        # Rectangle-specific properties
+        self._type_properties[EntityType.RECTANGLE_OBSTACLE]["width"][idx] = (
+            obstacle.width
+        )
+        self._type_properties[EntityType.RECTANGLE_OBSTACLE]["height"][idx] = (
+            obstacle.height
+        )
+        self._type_properties[EntityType.RECTANGLE_OBSTACLE]["color"][idx] = (
+            obstacle.color
+        )
+
+    def _add_circle_obstacle(self, obstacle, idx: int):
+        """Add a CircleObstacle entity to arrays."""
+        self._positions[idx] = np.array([
+            obstacle.position.x
+            if hasattr(obstacle.position, "x")
+            else obstacle.position[0],
+            obstacle.position.y
+            if hasattr(obstacle.position, "y")
+            else obstacle.position[1],
+        ])
+        self._entity_types[idx] = EntityType.CIRCLE_OBSTACLE
+        self._is_static[idx] = True
+        self._dynamic_mask[idx] = False
+
+        # Circle obstacle-specific properties
+        self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][idx] = (
+            obstacle.radius
+        )
+        self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][idx] = obstacle.color
 
     def remove_entity(self, entity_id: str) -> None:
-        if entity_id in self._entities:
-            del self._entities[entity_id]
-
-    def get_entities(self) -> list[Entity]:
-        return list(self._entities.values())
-
-    def clear(self) -> None:
-        self._entities.clear()
-
-    def step(self, dt: float) -> None:
-        """Advance simulation using Euler integration."""
-        if self._paused:
+        """Remove an entity from the simulation."""
+        if entity_id not in self._id_to_index:
             return
 
-        for entity in self._entities.values():
-            if isinstance(entity, Ball):
-                self._integrate_ball(entity, dt)
-                self._handle_boundary_collisions(entity)
+        idx = self._id_to_index[entity_id]
 
-    def _integrate_ball(self, ball: Ball, dt: float) -> None:
-        """Euler integration: update velocity and position."""
-        ball.reset_acceleration()
-        ball.clear_force_tracking()
+        # Swap with last entity and decrement count
+        last_idx = self._n_entities - 1
+        if idx != last_idx:
+            # Copy last entity data to removed position
+            self._positions[idx] = self._positions[last_idx]
+            self._entity_types[idx] = self._entity_types[last_idx]
+            self._is_static[idx] = self._is_static[last_idx]
+            self._dynamic_mask[idx] = self._dynamic_mask[last_idx]
+            self._velocities[idx] = self._velocities[last_idx]
+            self._accelerations[idx] = self._accelerations[last_idx]
+            self._masses[idx] = self._masses[last_idx]
+            self._restitutions[idx] = self._restitutions[last_idx]
+            self._drag_coeffs[idx] = self._drag_coeffs[last_idx]
+            self._cross_sections[idx] = self._cross_sections[last_idx]
 
-        # Apply all registered forces
+            # Copy type-specific properties
+            for entity_type, props in self._type_properties.items():
+                for key, arr in props.items():
+                    if isinstance(arr, np.ndarray):
+                        arr[idx] = arr[last_idx]
+                    elif isinstance(arr, list):
+                        arr[idx] = arr[last_idx]
+
+            # Update object and mapping
+            self._entity_objects[idx] = self._entity_objects[last_idx]
+            self._id_to_index[self._entity_objects[idx].id] = idx
+
+        # Remove last entity
+        self._entity_objects.pop()
+        del self._id_to_index[entity_id]
+        self._n_entities -= 1
+
+    def get_entities(self) -> list[Entity]:
+        """Get all entities currently in the simulation."""
+        return self._entity_objects[: self._n_entities]
+
+    def clear(self) -> None:
+        """Remove all entities from the simulation."""
+        self._n_entities = 0
+        self._entity_objects.clear()
+        self._id_to_index.clear()
+
+    def step(self, dt: float) -> None:
+        """Advance simulation using vectorized Euler integration."""
+        if self._paused or self._n_entities == 0:
+            return
+
+        # Get active slice
+        n = self._n_entities
+
+        # Get dynamic entity mask
+        dyn = self._dynamic_mask[:n]
+        n_dynamic = dyn.sum()
+
+        if n_dynamic == 0:
+            return
+
+        # Reset accelerations for dynamic entities (vectorized)
+        self._accelerations[:n][dyn] = 0.0
+
+        # Clear force tracking for all entities
+        for entity in self._entity_objects[:n]:
+            if hasattr(entity, "clear_force_tracking"):
+                entity.clear_force_tracking()
+
+        # Apply all forces (vectorized batch operations)
         for force in self.forces:
-            if force.should_apply_to(ball):
-                force_vector = force.apply_to(ball, dt)
-                ball.apply_force(force_vector)
-                ball.track_force(force.name, force_vector)
+            # Get force vectors for all dynamic entities
+            force_vectors = force.apply_to_batch(
+                positions=self._positions[:n][dyn],
+                velocities=self._velocities[:n][dyn],
+                masses=self._masses[:n][dyn],
+                drag_coeffs=self._drag_coeffs[:n][dyn],
+                cross_sections=self._cross_sections[:n][dyn],
+                entity_types=self._entity_types[:n][dyn],
+                dt=dt,
+            )
 
-        # Update velocity: v = v + a * dt
-        acceleration = ball.get_acceleration()
-        ball.velocity = ball.velocity + acceleration * dt
+            # Apply forces: a = F/m (vectorized)
+            masses_reshaped = self._masses[:n][dyn][:, np.newaxis]
+            self._accelerations[:n][dyn] += force_vectors / masses_reshaped
 
-        # Update position: p = p + v * dt
-        ball.position = ball.position + ball.velocity * dt
+            # Track forces for entities (for UI display)
+            dyn_indices = np.where(dyn)[0]
+            for i, entity_idx in enumerate(dyn_indices):
+                entity = self._entity_objects[entity_idx]
+                if hasattr(entity, "track_force"):
+                    entity.track_force(force.name, force_vectors[i])
 
-    def _handle_boundary_collisions(self, ball: Ball) -> None:
-        """Detect and resolve collisions with simulation boundaries."""
+        # Euler integration (vectorized, dynamic only)
+        self._velocities[:n][dyn] += self._accelerations[:n][dyn] * dt
+        self._positions[:n][dyn] += self._velocities[:n][dyn] * dt
+
+        # Boundary collisions (vectorized)
+        self._handle_boundary_collisions_vectorized()
+
+    def _handle_boundary_collisions_vectorized(self) -> None:
+        """Vectorized boundary collision detection and response."""
         width, height = self.bounds
+        n = self._n_entities
+
+        # Only handle balls (dynamic and type==BALL)
+        ball_mask = self._dynamic_mask[:n] & (self._entity_types[:n] == EntityType.BALL)
+        ball_indices = np.where(ball_mask)[0]
+
+        if len(ball_indices) == 0:
+            return
+
+        radii = self._type_properties[EntityType.BALL]["radius"][ball_indices]
 
         # Left boundary
-        if ball.position.x - ball.radius < 0:
-            ball.position.x = ball.radius
-            ball.velocity.x = -ball.velocity.x * ball.restitution
+        left_collision = self._positions[ball_indices, 0] - radii < 0
+        if left_collision.any():
+            self._positions[ball_indices[left_collision], 0] = radii[left_collision]
+            self._velocities[ball_indices[left_collision], 0] *= -self._restitutions[
+                ball_indices[left_collision]
+            ]
 
         # Right boundary
-        if ball.position.x + ball.radius > width:
-            ball.position.x = width - ball.radius
-            ball.velocity.x = -ball.velocity.x * ball.restitution
+        right_collision = self._positions[ball_indices, 0] + radii > width
+        if right_collision.any():
+            self._positions[ball_indices[right_collision], 0] = (
+                width - radii[right_collision]
+            )
+            self._velocities[ball_indices[right_collision], 0] *= -self._restitutions[
+                ball_indices[right_collision]
+            ]
 
         # Bottom boundary
-        if ball.position.y - ball.radius < 0:
-            ball.position.y = ball.radius
-            ball.velocity.y = -ball.velocity.y * ball.restitution
+        bottom_collision = self._positions[ball_indices, 1] - radii < 0
+        if bottom_collision.any():
+            self._positions[ball_indices[bottom_collision], 1] = radii[bottom_collision]
+            self._velocities[ball_indices[bottom_collision], 1] *= -self._restitutions[
+                ball_indices[bottom_collision]
+            ]
 
-            # TODO: Apply friction when in contact with ground
-            # if abs(ball.velocity.y) < threshold:
-            #     ball.velocity.x *= (1 - friction_coefficient)
-
-        # Top boundary (optional, not in original)
-        if ball.position.y + ball.radius > height:
-            ball.position.y = height - ball.radius
-            ball.velocity.y = -ball.velocity.y * ball.restitution
-
-    # TODO: Implement ball-to-ball collision detection and resolution
-    #
-    # def _handle_ball_collisions(self) -> None:
-    #     """Detect and resolve elastic collisions between balls."""
-    #     balls = [e for e in self._entities.values() if isinstance(e, Ball)]
-    #
-    #     for i, ball1 in enumerate(balls):
-    #         for ball2 in balls[i+1:]:
-    #             distance = (ball2.position - ball1.position).magnitude()
-    #             min_distance = ball1.radius + ball2.radius
-    #
-    #             if distance < min_distance:
-    #                 # Collision detected - resolve using elastic collision formulas
-    #                 # See: https://en.wikipedia.org/wiki/Elastic_collision
-    #                 normal = (ball2.position - ball1.position).normalized()
-    #
-    #                 # Separate balls
-    #                 overlap = min_distance - distance
-    #                 ball1.position = ball1.position - normal * (overlap / 2)
-    #                 ball2.position = ball2.position + normal * (overlap / 2)
-    #
-    #                 # Calculate new velocities
-    #                 relative_velocity = ball1.velocity - ball2.velocity
-    #                 velocity_along_normal = relative_velocity.dot(normal)
-    #
-    #                 if velocity_along_normal > 0:
-    #                     continue  # Balls moving apart
-    #
-    #                 # Compute impulse
-    #                 restitution = min(ball1.restitution, ball2.restitution)
-    #                 impulse_magnitude = -(1 + restitution) * velocity_along_normal
-    #                 impulse_magnitude /= (1/ball1.mass + 1/ball2.mass)
-    #
-    #                 impulse = normal * impulse_magnitude
-    #                 ball1.velocity = ball1.velocity - impulse / ball1.mass
-    #                 ball2.velocity = ball2.velocity + impulse / ball2.mass
+        # Top boundary
+        top_collision = self._positions[ball_indices, 1] + radii > height
+        if top_collision.any():
+            self._positions[ball_indices[top_collision], 1] = (
+                height - radii[top_collision]
+            )
+            self._velocities[ball_indices[top_collision], 1] *= -self._restitutions[
+                ball_indices[top_collision]
+            ]
 
     def pause(self) -> None:
+        """Pause the physics simulation."""
         self._paused = True
 
     def is_paused(self) -> bool:
+        """Check if physics simulation is paused."""
         return self._paused
 
     def toggle_pause(self) -> None:
+        """Toggle pause state."""
         self._paused = not self._paused
 
     def get_supported_entity_types(self) -> list[type]:
         """Return list of entity classes supported by NumpyPhysicsEngine."""
-        return [Ball]
+        from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
 
-    def get_entities_types(self) -> list[Entity]:
-        return [Ball]
+        return [Ball, RectangleObstacle, CircleObstacle]
+
+    # Internal array access for entity views
+    def _get_position(self, idx: int) -> np.ndarray:
+        """Get position array view for entity at index."""
+        return self._positions[idx]
+
+    def _get_velocity(self, idx: int) -> np.ndarray:
+        """Get velocity array view for entity at index."""
+        return self._velocities[idx]
+
+    def _get_mass(self, idx: int) -> float:
+        """Get mass for entity at index."""
+        return float(self._masses[idx])
+
+    def _set_mass(self, idx: int, value: float):
+        """Set mass for entity at index."""
+        self._masses[idx] = value

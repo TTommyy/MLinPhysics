@@ -1,4 +1,6 @@
-from physics_sim.core import Entity, Force, PhysicalEntity, Vector2D
+import numpy as np
+
+from physics_sim.core import Entity, Force, PhysicalEntity
 
 
 class EntitySpecificForce(Force):
@@ -9,13 +11,13 @@ class EntitySpecificForce(Force):
     """
 
     def __init__(
-        self, entity_id: str, name: str, force_vector: Vector2D, enabled: bool = True
+        self, entity_id: str, name: str, force_vector: np.ndarray, enabled: bool = True
     ):
         """
         Args:
             entity_id: ID of the entity this force applies to
             name: Name of the force (e.g., "Custom Thrust", "Wind")
-            force_vector: Force vector to apply (constant)
+            force_vector: Force vector to apply (constant), np.ndarray shape (2,)
             enabled: Whether this force is currently active
         """
         super().__init__(name)
@@ -31,13 +33,13 @@ class EntitySpecificForce(Force):
             and entity.id == self.entity_id
         )
 
-    def apply_to(self, entity: Entity, dt: float) -> Vector2D:
+    def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
         """Return the constant force vector."""
         if self.should_apply_to(entity):
             return self.force_vector
-        return Vector2D(0, 0)
+        return np.array([0.0, 0.0])
 
-    def set_force_vector(self, force_vector: Vector2D):
+    def set_force_vector(self, force_vector: np.ndarray):
         """Update the force vector dynamically."""
         self.force_vector = force_vector
 

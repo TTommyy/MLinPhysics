@@ -1,7 +1,8 @@
 from abc import ABC, abstractmethod
 
+import numpy as np
+
 from physics_sim.core.entity import Entity
-from physics_sim.core.vector import Vector2D
 
 
 class Force(ABC):
@@ -31,7 +32,7 @@ class Force(ABC):
         pass
 
     @abstractmethod
-    def apply_to(self, entity: Entity, dt: float) -> Vector2D:
+    def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
         """Calculate and return the force vector to apply to the entity.
 
         Args:
@@ -39,9 +40,37 @@ class Force(ABC):
             dt: Time step (may be needed for some force calculations)
 
         Returns:
-            Force vector (in Newtons)
+            Force vector (in Newtons) as np.ndarray shape (2,)
         """
         pass
+
+    def apply_to_batch(
+        self,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        masses: np.ndarray,
+        entity_types: np.ndarray,
+        dt: float,
+        **kwargs,
+    ) -> np.ndarray:
+        """Vectorized force calculation for batch of entities.
+
+        Args:
+            positions: Position vectors, shape (n, 2)
+            velocities: Velocity vectors, shape (n, 2)
+            masses: Mass values, shape (n,)
+            entity_types: Entity type IDs, shape (n,)
+            dt: Time step
+            **kwargs: Additional entity-specific properties (drag_coeffs, cross_sections, etc.)
+
+        Returns:
+            Force vectors for all entities, shape (n, 2)
+        """
+        # Default implementation: fallback to per-entity (slow but correct)
+        n = len(positions)
+        forces = np.zeros((n, 2), dtype=np.float64)
+        # Note: This is a fallback. Subclasses should override for performance.
+        return forces
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name})"

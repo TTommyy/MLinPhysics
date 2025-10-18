@@ -1,7 +1,7 @@
 from abc import ABC, abstractmethod
 from typing import Any
 
-from physics_sim.core.vector import Vector2D
+import numpy as np
 
 
 class Entity(ABC):
@@ -21,24 +21,24 @@ class PhysicalEntity(Entity):
 
     def __init__(
         self,
-        position: Vector2D,
-        velocity: Vector2D,
+        position: np.ndarray,
+        velocity: np.ndarray,
         mass: float = 1.0,
         entity_id: str | None = None,
     ):
         super().__init__(entity_id)
         self.position = position
         self.velocity = velocity
+
         self.mass = mass
         self._applied_forces: list[
-            tuple[str, Vector2D]
+            tuple[str, np.ndarray]
         ] = []  # (force_name, force_vector)
 
     @abstractmethod
-    def apply_force(self, force: Vector2D):
+    def apply_force(self, force: np.ndarray):
         """Apply a force to this entity."""
         pass
-
 
     @property
     def drag_enabled(self) -> bool:
@@ -57,7 +57,6 @@ class PhysicalEntity(Entity):
         """
         pass
 
-
     @property
     def cross_sectional_area() -> float:
         """Cross sectional area for drag fore calculation"""
@@ -73,21 +72,21 @@ class PhysicalEntity(Entity):
         return False
 
     @property
-    def thrust_vector(self) -> Vector2D:
+    def thrust_vector(self) -> np.ndarray:
         """Current thrust force vector.
 
         Subclasses with thrust capability should override this property to return
         the current thrust direction and magnitude.
         Default is zero vector (no thrust).
         """
-        return Vector2D(0, 0)
+        return np.array([0.0, 0.0])
 
-    def track_force(self, force_name: str, force_vector: Vector2D):
+    def track_force(self, force_name: str, force_vector: np.ndarray):
         """Record a force application for data collection.
 
         Args:
             force_name: Name of the force (e.g., "Gravity", "Drag")
-            force_vector: Force vector that was applied
+            force_vector: Force vector that was applied as np.ndarray
         """
         self._applied_forces.append((force_name, force_vector))
 
@@ -104,11 +103,15 @@ class PhysicalEntity(Entity):
         return {
             "id": self.id,
             "mass": self.mass,
-            "position": self.position.to_tuple(),
-            "velocity": self.velocity.to_tuple(),
-            "speed": self.velocity.magnitude(),
+            "position": self.position,
+            "velocity": self.velocity,
+            "speed": float(np.linalg.norm(self.velocity)),
             "applied_forces": [
-                {"name": name, "vector": vec.to_tuple(), "magnitude": vec.magnitude()}
+                {
+                    "name": name,
+                    "vector": tuple(vec),
+                    "magnitude": float(np.linalg.norm(vec)),
+                }
                 for name, vec in self._applied_forces
             ],
         }

@@ -1,4 +1,6 @@
-from physics_sim.core import PhysicalEntity, Vector2D
+import numpy as np
+
+from physics_sim.core import PhysicalEntity
 
 
 class EntitySelector:
@@ -10,12 +12,12 @@ class EntitySelector:
         self.selection_radius = 0.5  # Search radius for entity detection
 
     def select_entity(
-        self, click_pos: Vector2D, entities: list[PhysicalEntity]
+        self, click_pos: np.ndarray, entities: list[PhysicalEntity]
     ) -> PhysicalEntity | None:
         """Find and select entity closest to click position.
 
         Args:
-            click_pos: Click position in physics coordinates
+            click_pos: Click position in physics coordinates as np.ndarray([x, y])
             entities: List of entities to search
 
         Returns:
@@ -28,7 +30,12 @@ class EntitySelector:
             if not isinstance(entity, PhysicalEntity):
                 continue
 
-            distance = (entity.position - click_pos).magnitude()
+            # Calculate distance (handle both numpy arrays and Vector2D)
+            if isinstance(entity.position, np.ndarray):
+                distance = float(np.linalg.norm(entity.position - click_pos))
+            else:
+                distance = (entity.position - click_pos).magnitude()
+
             if distance < min_distance:
                 min_distance = distance
                 closest_entity = entity

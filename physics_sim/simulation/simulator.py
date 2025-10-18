@@ -1,8 +1,9 @@
 import logging
 
 import arcade
+import numpy as np
 
-from physics_sim.core import PhysicsEngine, Vector2D
+from physics_sim.core import PhysicsEngine
 from physics_sim.simulation.config import SimulationConfig
 from physics_sim.ui import EntitySelector
 from physics_sim.ui.sections import (
@@ -220,7 +221,7 @@ class Simulator(arcade.Window):
             renderer = self.viewport_section.renderer
             phys_x = renderer.screen_to_physics_x(x)
             phys_y = renderer.screen_to_physics_y(y)
-            click_pos = Vector2D(phys_x, phys_y)
+            click_pos = np.array([phys_x, phys_y])
 
             logger.debug(f"Physics coords: ({phys_x:.2f}, {phys_y:.2f})")
             logger.debug(
@@ -242,7 +243,7 @@ class Simulator(arcade.Window):
                         # Extract velocity and mass
                         velocity_x = params.get("velocity_x", 0.0)
                         velocity_y = params.get("velocity_y", 0.0)
-                        velocity = Vector2D(velocity_x, velocity_y)
+                        velocity = np.array([velocity_x, velocity_y])
                         mass = params.get("mass", 1.0)
 
                         # Create entity

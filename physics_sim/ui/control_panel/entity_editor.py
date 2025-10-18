@@ -1,6 +1,5 @@
 import arcade.gui
-
-from physics_sim.core import Vector2D
+import numpy as np
 
 
 class EntityEditorPanel:
@@ -62,7 +61,9 @@ class EntityEditorPanel:
         self.layout.add(arcade.gui.UISpace(height=5))
 
         # Get parameters
-        temp = self.entity_class(position=Vector2D(0, 0), velocity=Vector2D(0, 0))
+        temp = self.entity_class(
+            position=np.array([0.0, 0.0]), velocity=np.array([0.0, 0.0])
+        )
         self.editor_parameters = temp.get_settable_parameters()
 
         # Add input fields

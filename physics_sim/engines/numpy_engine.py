@@ -300,6 +300,10 @@ class NumpyPhysicsEngine(PhysicsEngine):
         # Boundary collisions (vectorized)
         self._handle_boundary_collisions_vectorized()
 
+        # Entity-entity collisions (vectorized)
+        self._handle_ball_ball_collisions_vectorized()
+        self._handle_ball_obstacle_collisions_vectorized()
+
     def _handle_boundary_collisions_vectorized(self) -> None:
         """Vectorized boundary collision detection and response."""
         width, height = self.bounds
@@ -349,6 +353,251 @@ class NumpyPhysicsEngine(PhysicsEngine):
             self._velocities[ball_indices[top_collision], 1] *= -self._restitutions[
                 ball_indices[top_collision]
             ]
+
+    def _handle_ball_ball_collisions_vectorized(self) -> None:
+        """Vectorized ball-ball collision detection and elastic response."""
+        n = self._n_entities
+
+        # Get ball mask and indices
+        ball_mask = self._dynamic_mask[:n] & (self._entity_types[:n] == EntityType.BALL)
+        ball_indices = np.where(ball_mask)[0]
+
+        if len(ball_indices) < 2:
+            return
+
+        # Cache ball data for performance
+        positions = self._positions[ball_indices]
+        velocities = self._velocities[ball_indices]
+        masses = self._masses[ball_indices]
+        radii = self._type_properties[EntityType.BALL]["radius"][ball_indices]
+        restitutions = self._restitutions[ball_indices]
+
+        n_balls = len(ball_indices)
+
+        # Check all pairs (upper triangle to avoid duplicate checks)
+        for i in range(n_balls):
+            for j in range(i + 1, n_balls):
+                # Calculate distance vector
+                delta = positions[j] - positions[i]
+                distance = np.linalg.norm(delta)
+
+                # Check for collision
+                min_distance = radii[i] + radii[j]
+                if distance < min_distance and distance > 1e-10:
+                    # Collision normal (from i to j)
+                    normal = delta / distance
+
+                    # Relative velocity
+                    relative_velocity = velocities[i] - velocities[j]
+
+                    # Velocity along normal
+                    v_normal = np.dot(relative_velocity, normal)
+
+                    # Don't resolve if objects are separating
+                    if v_normal <= 0:
+                        continue
+
+                    # Calculate restitution (average of both balls)
+                    restitution = (restitutions[i] + restitutions[j]) / 2.0
+
+                    # Calculate impulse scalar using momentum conservation
+                    # j = -(1 + e) * v_rel · n / (1/m1 + 1/m2)
+                    impulse_scalar = (
+                        -(1.0 + restitution)
+                        * v_normal
+                        / (1.0 / masses[i] + 1.0 / masses[j])
+                    )
+
+                    # Apply impulse to velocities
+                    impulse = impulse_scalar * normal
+                    velocities[i] += impulse / masses[i]
+                    velocities[j] -= impulse / masses[j]
+
+                    # Position correction (separate overlapping balls)
+                    overlap = min_distance - distance
+                    if overlap > 0:
+                        # Separate proportionally to masses (lighter moves more)
+                        total_mass = masses[i] + masses[j]
+                        correction_i = -normal * overlap * (masses[j] / total_mass)
+                        correction_j = normal * overlap * (masses[i] / total_mass)
+
+                        positions[i] += correction_i
+                        positions[j] += correction_j
+
+        # Write back updated values
+        self._positions[ball_indices] = positions
+        self._velocities[ball_indices] = velocities
+
+    def _handle_ball_obstacle_collisions_vectorized(self) -> None:
+        """Dispatcher for ball-obstacle collisions."""
+        self._handle_ball_circle_obstacle_collisions_vectorized()
+        self._handle_ball_rectangle_obstacle_collisions_vectorized()
+
+    def _handle_ball_circle_obstacle_collisions_vectorized(self) -> None:
+        """Vectorized ball-circle obstacle collision detection and response."""
+        n = self._n_entities
+
+        # Get ball and circle obstacle indices
+        ball_mask = self._dynamic_mask[:n] & (self._entity_types[:n] == EntityType.BALL)
+        circle_mask = self._is_static[:n] & (
+            self._entity_types[:n] == EntityType.CIRCLE_OBSTACLE
+        )
+
+        ball_indices = np.where(ball_mask)[0]
+        circle_indices = np.where(circle_mask)[0]
+
+        if len(ball_indices) == 0 or len(circle_indices) == 0:
+            return
+
+        # Cache data
+        ball_positions = self._positions[ball_indices]
+        ball_velocities = self._velocities[ball_indices]
+        ball_radii = self._type_properties[EntityType.BALL]["radius"][ball_indices]
+        ball_restitutions = self._restitutions[ball_indices]
+
+        circle_positions = self._positions[circle_indices]
+        circle_radii = self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][
+            circle_indices
+        ]
+
+        # Check all ball-circle pairs
+        for i, ball_idx in enumerate(ball_indices):
+            for j, circle_idx in enumerate(circle_indices):
+                # Calculate distance vector
+                delta = ball_positions[i] - circle_positions[j]
+                distance = np.linalg.norm(delta)
+
+                # Check for collision
+                min_distance = ball_radii[i] + circle_radii[j]
+                if distance < min_distance and distance > 1e-10:
+                    # Collision normal (from circle to ball)
+                    normal = delta / distance
+
+                    # Velocity along normal
+                    v_normal = np.dot(ball_velocities[i], normal)
+
+                    # Only resolve if ball is moving into obstacle
+                    if v_normal >= 0:
+                        continue
+
+                    # Reflect velocity with restitution
+                    ball_velocities[i] -= (
+                        (1.0 + ball_restitutions[i]) * v_normal * normal
+                    )
+
+                    # Position correction (push ball out of obstacle)
+                    overlap = min_distance - distance
+                    if overlap > 0:
+                        ball_positions[i] += normal * overlap
+
+        # Write back updated values
+        self._positions[ball_indices] = ball_positions
+        self._velocities[ball_indices] = ball_velocities
+
+    def _handle_ball_rectangle_obstacle_collisions_vectorized(self) -> None:
+        """Vectorized ball-rectangle obstacle collision detection and response."""
+        n = self._n_entities
+
+        # Get ball and rectangle obstacle indices
+        ball_mask = self._dynamic_mask[:n] & (self._entity_types[:n] == EntityType.BALL)
+        rect_mask = self._is_static[:n] & (
+            self._entity_types[:n] == EntityType.RECTANGLE_OBSTACLE
+        )
+
+        ball_indices = np.where(ball_mask)[0]
+        rect_indices = np.where(rect_mask)[0]
+
+        if len(ball_indices) == 0 or len(rect_indices) == 0:
+            return
+
+        # Cache data
+        ball_positions = self._positions[ball_indices]
+        ball_velocities = self._velocities[ball_indices]
+        ball_radii = self._type_properties[EntityType.BALL]["radius"][ball_indices]
+        ball_restitutions = self._restitutions[ball_indices]
+
+        rect_positions = self._positions[rect_indices]
+        rect_widths = self._type_properties[EntityType.RECTANGLE_OBSTACLE]["width"][
+            rect_indices
+        ]
+        rect_heights = self._type_properties[EntityType.RECTANGLE_OBSTACLE]["height"][
+            rect_indices
+        ]
+
+        # Check all ball-rectangle pairs
+        for i, ball_idx in enumerate(ball_indices):
+            for j, rect_idx in enumerate(rect_indices):
+                # Rectangle bounds (assuming position is center)
+                rect_x = rect_positions[j][0]
+                rect_y = rect_positions[j][1]
+                half_width = rect_widths[j] / 2.0
+                half_height = rect_heights[j] / 2.0
+
+                rect_left = rect_x - half_width
+                rect_right = rect_x + half_width
+                rect_bottom = rect_y - half_height
+                rect_top = rect_y + half_height
+
+                ball_x = ball_positions[i][0]
+                ball_y = ball_positions[i][1]
+
+                # Find closest point on rectangle to ball center
+                closest_x = np.clip(ball_x, rect_left, rect_right)
+                closest_y = np.clip(ball_y, rect_bottom, rect_top)
+
+                # Calculate distance from ball center to closest point
+                delta_x = ball_x - closest_x
+                delta_y = ball_y - closest_y
+                distance = np.sqrt(delta_x**2 + delta_y**2)
+
+                # Check for collision
+                if distance < ball_radii[i]:
+                    # Handle case when ball center is inside rectangle
+                    if distance < 1e-10:
+                        # Find which edge is closest
+                        dist_left = abs(ball_x - rect_left)
+                        dist_right = abs(ball_x - rect_right)
+                        dist_bottom = abs(ball_y - rect_bottom)
+                        dist_top = abs(ball_y - rect_top)
+
+                        min_dist = min(dist_left, dist_right, dist_bottom, dist_top)
+
+                        if min_dist == dist_left:
+                            normal = np.array([-1.0, 0.0])
+                            overlap = ball_radii[i] + dist_left
+                        elif min_dist == dist_right:
+                            normal = np.array([1.0, 0.0])
+                            overlap = ball_radii[i] + dist_right
+                        elif min_dist == dist_bottom:
+                            normal = np.array([0.0, -1.0])
+                            overlap = ball_radii[i] + dist_bottom
+                        else:  # top
+                            normal = np.array([0.0, 1.0])
+                            overlap = ball_radii[i] + dist_top
+                    else:
+                        # Normal from closest point to ball center
+                        normal = np.array([delta_x / distance, delta_y / distance])
+                        overlap = ball_radii[i] - distance
+
+                    # Velocity along normal
+                    v_normal = np.dot(ball_velocities[i], normal)
+
+                    # Only resolve if ball is moving into obstacle
+                    if v_normal >= 0:
+                        continue
+
+                    # Reflect velocity with restitution
+                    ball_velocities[i] -= (
+                        (1.0 + ball_restitutions[i]) * v_normal * normal
+                    )
+
+                    # Position correction (push ball out of obstacle)
+                    if overlap > 0:
+                        ball_positions[i] += normal * overlap
+
+        # Write back updated values
+        self._positions[ball_indices] = ball_positions
+        self._velocities[ball_indices] = ball_velocities
 
     def pause(self) -> None:
         """Pause the physics simulation."""

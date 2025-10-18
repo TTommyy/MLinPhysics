@@ -7,7 +7,7 @@ class EntitySelector:
     def __init__(self):
         """Initialize selector with no selection."""
         self.selected_entity_id: str | None = None
-        self.selection_radius = 0.5  # Search radius for entity detection
+        self.selection_radius = 1  # Search radius for entity detection
 
     def select_entity(
         self, click_pos: np.ndarray, render_data: list[dict]

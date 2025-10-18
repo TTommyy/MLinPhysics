@@ -17,8 +17,8 @@ class SimulationConfig:
     window_title: str = "Physics Simulation"
 
     # Layout percentages
-    control_panel_width_pct: float = 0.25
-    inventory_panel_width_pct: float = 0.25
+    control_panel_width_pct: float = 0.20
+    inventory_panel_width_pct: float = 0.20
     viewport_height_pct: float = 0.50
 
     # Physics settings

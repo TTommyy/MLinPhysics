@@ -2,6 +2,7 @@ import arcade.gui
 import numpy as np
 
 from physics_sim.core import Entity
+from physics_sim.ui.utils import format_vector_for_display, parse_vector_from_text
 
 
 class EntityEditorPanel:
@@ -165,15 +166,7 @@ class EntityEditorPanel:
         )
         field_box.add(lbl)
 
-        formatted = []
-        for x in default_value:
-            if isinstance(x, int):
-                formatted.append(f"{x}")
-            elif isinstance(x, float):
-                formatted.append(f"{x:.2f}")
-            else:
-                formatted.append(str(x))
-        text_value = "[" + ", ".join(formatted) + "]"
+        text_value = format_vector_for_display(default_value)
 
         inp = arcade.gui.UIInputText(
             text=text_value,
@@ -246,12 +239,11 @@ class EntityEditorPanel:
 
         # Parse vector fields
         for name, field in self.editor_vector_fields.items():
-            # Parse "[x, y]" format
-            text = field.text.strip()
-            if text.startswith("[") and text.endswith("]"):
-                text = text[1:-1]
-            parts = [float(x.strip()) for x in text.split(",")]
-            data[name] = parts
+            try:
+                data[name] = parse_vector_from_text(field.text)
+            except ValueError:
+                # Keep old value if parsing fails
+                pass
 
         return data
 

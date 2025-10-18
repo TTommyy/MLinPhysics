@@ -4,12 +4,13 @@ import arcade
 import numpy as np
 
 from physics_sim.core import PhysicsEngine
+from physics_sim.forces import get_supported_forces
 from physics_sim.simulation.config import SimulationConfig
 from physics_sim.ui import EntitySelector
 from physics_sim.ui.sections import (
     ControlPanelSection,
-    DebugInfoSection,
     EnergyManagerSection,
+    ForceManagerSection,
     InventoryPanelSection,
     ViewportSection,
 )
@@ -31,7 +32,7 @@ class Simulator(arcade.Window):
         self,
         config: SimulationConfig,
         engine: PhysicsEngine,
-        fps: float = 60.0,
+        fps: float = 65.0,
     ):
         """
         Args:
@@ -43,10 +44,14 @@ class Simulator(arcade.Window):
             height=config.screen_height,
             title=config.window_title,
             update_rate=(1 / fps),
+            draw_rate=(1/fps),
+            gl_version=(3, 3),
+            antialiasing=True,
         )
 
         self._config = config
         self.engine = engine
+        force_types = get_supported_forces()
 
         # Create layout manager
         self.layout = config.create_layout_manager()
@@ -59,7 +64,9 @@ class Simulator(arcade.Window):
             self.layout.viewport, config.sim_width, config.sim_height
         )
         self.inventory_section = InventoryPanelSection(self.layout.inventory_panel)
-        self.debug_info_section = DebugInfoSection(self.layout.top_placeholder)
+        self.force_manager_section = ForceManagerSection(
+            self.layout.top_placeholder, forces=force_types
+        )
         self.energy_manager_section = EnergyManagerSection(
             self.layout.bottom_placeholder
         )
@@ -99,6 +106,10 @@ class Simulator(arcade.Window):
         )
         self.control_section.entity_editor.on_save = self._on_entity_editor_save
 
+        # Force manager callbacks
+        self.force_manager_section.on_force_toggle = self._on_force_toggle
+        self.force_manager_section.on_force_params_update = self._on_force_params_update
+
     def setup(self):
         """Initialize simulation state (called after window creation)."""
         logger.info("Setting up simulator")
@@ -106,6 +117,7 @@ class Simulator(arcade.Window):
         # Enable UI sections
         self.control_section.enable()
         self.inventory_section.enable()
+        self.force_manager_section.enable()
 
         # Set initial button states
         self.control_section.display_controls.set_grid_enabled(
@@ -118,6 +130,15 @@ class Simulator(arcade.Window):
             f"Loaded {len(entity_types)} entity types: {[t.__name__ for t in entity_types]}"
         )
         self.control_section.placement_controls.set_available_entity_types(entity_types)
+
+        # Load available force types
+
+        # Update force manager with currently active forces
+        active_forces = self.engine.get_forces()
+        logger.info(
+            f"Active forces in engine: {[type(f).__name__ for f in active_forces]}"
+        )
+        self.force_manager_section.update_active_forces(active_forces)
 
         # Maximize window on startup
         self.maximize()
@@ -160,6 +181,12 @@ class Simulator(arcade.Window):
             )
             inventory_data = self.engine.get_inventory_data()
             self.inventory_section.render_with_data(inventory_data)
+
+            # Update force manager with current forces
+            active_forces = self.engine.get_forces()
+
+            self.force_manager_section.update_active_forces(active_forces)
+
             self._energy_timer = 0.0
 
     def on_draw(self):
@@ -168,7 +195,7 @@ class Simulator(arcade.Window):
 
         # Draw all sections manually
         self.viewport_section.on_draw()
-        self.debug_info_section.on_draw()
+        self.force_manager_section.on_draw()
         self.energy_manager_section.on_draw()
         self.control_section.on_draw()
         self.inventory_section.on_draw()
@@ -177,9 +204,9 @@ class Simulator(arcade.Window):
         render_data = self.engine.get_render_data()
         self.viewport_section.render_with_data(render_data)
 
-        # Render debug info
+        # Update debug info in status display
         entity_counts = self.engine.get_entity_counts_by_type()
-        self.debug_info_section.render_with_data(
+        self.control_section.status_display.update_debug_info(
             fps=self._current_fps,
             entity_counts=entity_counts,
         )
@@ -214,7 +241,6 @@ class Simulator(arcade.Window):
                 logger.info("Exiting add mode via ESC")
                 self.add_mode = False
                 self.control_section.placement_controls.set_add_mode(False)
-                self.control_section.update_status()
             else:
                 logger.info("Closing window via ESC")
                 self.close()
@@ -223,7 +249,6 @@ class Simulator(arcade.Window):
         elif key == arcade.key.TAB and self.add_mode:
             logger.info("Cycling entity type")
             self.control_section.placement_controls.cycle_type()
-            self.control_section.update_status()
 
     def on_mouse_press(self, x: float, y: float, button: int, modifiers: int):
         """Handle mouse clicks.
@@ -340,8 +365,6 @@ class Simulator(arcade.Window):
             # Clear entity editor when exiting add mode
             self.control_section.entity_editor.clear()
 
-        self.control_section.update_status()
-
     def _on_object_type_change(self, entity_class: type):
         """Handle object type change from control panel.
 
@@ -353,8 +376,6 @@ class Simulator(arcade.Window):
         # Update entity editor if in add mode
         if self.add_mode:
             self.control_section.entity_editor.set_entity_type(entity_class)
-
-        self.control_section.update_status()
 
     def _on_grid_toggle(self):
         """Handle grid toggle from control panel."""
@@ -402,6 +423,54 @@ class Simulator(arcade.Window):
                     logger.error("Failed to update entity in engine")
             except Exception as e:
                 logger.error(f"Failed to update entity: {e}")
+
+    def _on_force_toggle(self, force_class: type, enabled: bool):
+        """Handle force activation/deactivation.
+
+        Args:
+            force_class: Force class to toggle
+            enabled: True to enable, False to disable
+        """
+        force_name = force_class.__name__
+        logger.info(f"Force toggle: {force_name} -> {enabled}")
+
+        if enabled:
+            # Create force instance with default parameters
+            force_instance = force_class()
+            self.engine.add_force(force_instance)
+            logger.info(f"Added force: {force_name}")
+        else:
+            # Find and remove force instance
+            active_forces = self.engine.get_forces()
+            for force in active_forces:
+                if type(force).__name__ == force_name:
+                    self.engine.remove_force(force)
+                    logger.info(f"Removed force: {force_name}")
+                    break
+
+        # Update force manager display
+        active_forces = self.engine.get_forces()
+        self.force_manager_section.update_active_forces(active_forces)
+
+    def _on_force_params_update(self, force_instance, params: dict):
+        """Handle force parameter update.
+
+        Args:
+            force_instance: Force instance to update
+            params: Dictionary of parameter values
+        """
+        force_name = type(force_instance).__name__
+        logger.info(f"Updating force parameters: {force_name}")
+
+        success = force_instance.update_parameters(params)
+        if success:
+            logger.info(f"Force parameters updated: {force_name}")
+        else:
+            logger.error(f"Failed to update force parameters: {force_name}")
+
+        # Refresh force manager display
+        active_forces = self.engine.get_forces()
+        self.force_manager_section.update_active_forces(active_forces)
 
     def run(self):
         """Start the simulation."""

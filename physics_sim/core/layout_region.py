@@ -39,3 +39,6 @@ class LayoutRegion:
     def center_y(self) -> int:
         """Center Y coordinate."""
         return self.y + self.height // 2
+
+    def __str__(self) -> str:
+        return f"L:{self.left} R:{self.right}; T:{self.top} B:{self.bottom}"

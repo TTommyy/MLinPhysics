@@ -22,7 +22,7 @@ class PlacementControls:
         label = arcade.gui.UILabel(
             text="Object Placement",
             font_size=10,
-            text_color=arcade.color.DARK_GRAY,
+            text_color=arcade.color.BLACK_LEATHER_JACKET,
         )
         self.layout.add(label)
 
@@ -39,7 +39,8 @@ class PlacementControls:
         self.object_type_button = arcade.gui.UIFlatButton(
             text="Type: (no engine)",
             width=self.button_width,
-            height=35,
+            multiline=True,
+            height=40,
         )
         self.object_type_button.on_click = self._cycle_object_type
         self.layout.add(self.object_type_button)

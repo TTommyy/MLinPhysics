@@ -1,3 +1,5 @@
+from typing import Any
+
 import numpy as np
 
 from physics_sim.core import Entity, Force, PhysicalEntity
@@ -77,6 +79,41 @@ class LinearGravityForce(Force):
         heights = positions[:, 1]  # y-coordinates
         g_magnitude = -self.acceleration[1]  # Negate to get positive for upward
         return float(np.sum(masses * g_magnitude * heights))
+
+    @classmethod
+    def is_unique(cls) -> bool:
+        """Only one gravity force instance allowed."""
+        return True
+
+    @classmethod
+    def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
+        """Get default settable parameters for LinearGravityForce."""
+        return {
+            "acceleration": {
+                "type": "vector",
+                "default": [0.0, -9.81],
+                "label": "acceleration [x, y]",
+            },
+        }
+
+    def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
+        """Get metadata for editable parameters with current values."""
+        return {
+            "acceleration": {
+                "type": "vector",
+                "default": self.acceleration.tolist(),
+                "label": "acceleration [x, y]",
+            },
+        }
+
+    def update_parameters(self, config: dict[str, Any]) -> bool:
+        """Update gravity parameters from config dict."""
+        try:
+            if "acceleration" in config:
+                self.acceleration = np.array(config["acceleration"])
+            return True
+        except (ValueError, TypeError, IndexError):
+            return False
 
     def __repr__(self) -> str:
         return f"LinearGravityForce(acceleration={self.acceleration})"

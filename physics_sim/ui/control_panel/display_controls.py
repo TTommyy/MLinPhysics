@@ -22,7 +22,7 @@ class DisplayControls:
         label = arcade.gui.UILabel(
             text="Display Options",
             font_size=10,
-            text_color=arcade.color.DARK_GRAY,
+            text_color=arcade.color.BLACK_LEATHER_JACKET,
         )
         self.layout.add(label)
 

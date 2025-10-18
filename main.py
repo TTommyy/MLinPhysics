@@ -30,8 +30,8 @@ def main():
         bounds=(config.sim_width, config.sim_height),
     )
     # Add forces to numpy engine
-    engine.add_force(LinearGravityForce())
-    engine.add_force(DragForce())
+    # engine.add_force(LinearGravityForce())
+    # engine.add_force(DragForce())
     ball = Ball.create_cannonball()
     engine.add_entity(ball)
     # Run simulation

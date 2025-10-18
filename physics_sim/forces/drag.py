@@ -2,6 +2,8 @@
 ### Based on: https://en.wikipedia.org/wiki/Drag_(physics)#The_drag_equation
 ####
 
+from typing import Any
+
 import numpy as np
 
 from physics_sim.core import Entity, Force, PhysicalEntity
@@ -121,6 +123,57 @@ class DragForce(Force):
             result[mask] = direction * -magnitude
 
         return result
+
+    @classmethod
+    def is_unique(cls) -> bool:
+        """Only one drag force instance allowed."""
+        return True
+
+    @classmethod
+    def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
+        """Get default settable parameters for DragForce."""
+        return {
+            "fluid_density": {
+                "type": "float",
+                "default": 1.225,
+                "min": 0.1,
+                "max": 10.0,
+                "label": "Fluid Density (kg/m³)",
+            },
+            "linear": {
+                "type": "bool",
+                "default": True,
+                "label": "Linear Model",
+            },
+        }
+
+    def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
+        """Get metadata for editable parameters with current values."""
+        return {
+            "fluid_density": {
+                "type": "float",
+                "default": float(self.fluid_density),
+                "min": 0.1,
+                "max": 10.0,
+                "label": "Fluid Density (kg/m³)",
+            },
+            "linear": {
+                "type": "bool",
+                "default": bool(self.linear),
+                "label": "Linear Model",
+            },
+        }
+
+    def update_parameters(self, config: dict[str, Any]) -> bool:
+        """Update drag parameters from config dict."""
+        try:
+            if "fluid_density" in config:
+                self.fluid_density = float(config["fluid_density"])
+            if "linear" in config:
+                self.linear = bool(config["linear"])
+            return True
+        except (ValueError, TypeError):
+            return False
 
     def __repr__(self) -> str:
         model = "linear" if self.linear else "quadratic"

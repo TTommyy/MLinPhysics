@@ -10,7 +10,7 @@ from physics_sim.ui.control_panel import (
 )
 from physics_sim.ui.sections.base_section import BaseSection
 
-SPLIT_PCT = 0.45
+SPLIT_PCT = 0.5
 
 
 class ControlPanelSection(BaseSection):
@@ -126,18 +126,6 @@ class ControlPanelSection(BaseSection):
 
         self.editor_ui_manager.add(editor_anchor)
 
-    def update_status(self):
-        """Update status based on current mode."""
-        if self.placement_controls.add_mode:
-            entity_type = self.placement_controls.get_selected_entity_type()
-            if entity_type:
-                self.status_display.set_adding(entity_type.__name__)
-            else:
-                self.status_display.set_status(
-                    "● Adding (no types)", arcade.color.ORANGE
-                )
-        else:
-            self.status_display.set_normal()
 
     def on_draw(self):
         """Draw the control panel section with internal split layout."""

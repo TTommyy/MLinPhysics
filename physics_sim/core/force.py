@@ -1,4 +1,5 @@
 from abc import ABC, abstractmethod
+from typing import Any
 
 import numpy as np
 
@@ -89,6 +90,55 @@ class Force(ABC):
             Total potential energy contribution in Joules
         """
         return 0.0
+
+    @classmethod
+    def is_unique(cls) -> bool:
+        """Determine if only one instance of this force can exist.
+
+        Returns:
+            True if only one instance allowed, False if multiple instances allowed
+        """
+        return True
+
+    @classmethod
+    def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
+        """Get default settable parameters for force creation.
+
+        Returns metadata for editable parameters.
+        Subclasses should override this to provide their specific parameters.
+
+        Returns:
+            Dictionary mapping parameter names to their metadata:
+            {
+                "param_name": {
+                    "type": "float" | "int" | "bool" | "vector",
+                    "default": default_value,
+                    "min": min_value (optional),
+                    "max": max_value (optional),
+                    "label": "Display Label"
+                }
+            }
+        """
+        return {}
+
+    def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
+        """Get metadata for all editable parameters with current values.
+
+        Returns:
+            Dictionary mapping parameter names to their metadata with current values
+        """
+        return {}
+
+    def update_parameters(self, config: dict[str, Any]) -> bool:
+        """Update force parameters from config dict.
+
+        Args:
+            config: Dictionary of parameter values to update
+
+        Returns:
+            True if update successful, False otherwise
+        """
+        return True
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name})"

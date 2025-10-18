@@ -58,6 +58,10 @@ class PhysicsEngine(ABC):
         if force in self.forces:
             self.forces.remove(force)
 
+    def get_forces(self) -> list:
+        """Get all forces that apply"""
+        return self.forces
+
     def clear_forces(self) -> None:
         """Remove all forces from the simulation."""
         self.forces.clear()

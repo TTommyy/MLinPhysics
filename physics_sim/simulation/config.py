@@ -19,14 +19,13 @@ class SimulationConfig:
     # Layout percentages
     control_panel_width_pct: float = 0.20
     inventory_panel_width_pct: float = 0.20
-    viewport_height_pct: float = 0.50
+    viewport_height_pct: float = 0.40
 
     # Physics settings
     sim_width: float = 12
     sim_height: float = 8
     timestep: float = 1.0 / 60.0
     gravity: np.ndarray = field(default_factory=lambda: np.array([0.0, -9.81]))
-
 
     # Debug settings
     show_debug_info: bool = True
@@ -59,7 +58,7 @@ class SimulationConfig:
         # Use default layout percentages
         control_panel_width_pct = 0.15
         inventory_panel_width_pct = 0.15
-        viewport_height_pct = 0.60
+        viewport_height_pct = 0.50
 
         # Calculate actual viewport dimensions
         control_width = int(width * control_panel_width_pct)

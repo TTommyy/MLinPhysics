@@ -7,9 +7,6 @@ import logging
 import arcade
 
 from physics_sim import (
-    Ball,
-    DragForce,
-    LinearGravityForce,
     NumpyPhysicsEngine,
     SimulationConfig,
     Simulator,
@@ -36,8 +33,8 @@ def main():
     # Add forces to numpy engine
     # engine.add_force(LinearGravityForce())
     # engine.add_force(DragForce())
-    ball = Ball.create_cannonball()
-    engine.add_entity(ball)
+    # ball = Ball.create_cannonball()
+    # engine.add_entity(ball)
     # Run simulation
     simulator = Simulator(config, engine)
     simulator.run()

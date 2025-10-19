@@ -129,7 +129,7 @@ class CentralGravityForce(Force):
             {
                 "kind": "circle",
                 "position": self.center.tolist(),
-                "radius": 0.12,
+                "radius": max(min(1, (self.G * self.center_mass) / 20), 0.1),
                 "color": (60, 60, 60),
             },
             {

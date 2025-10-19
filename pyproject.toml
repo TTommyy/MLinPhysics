@@ -33,3 +33,8 @@ ignore = ["E501"]
 testpaths = ["tests"]
 python_files = "test_*.py"
 
+[dependency-groups]
+dev = [
+    "watchfiles>=1.1.1",
+]
+

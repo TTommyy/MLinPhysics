@@ -1,3 +1,7 @@
+###
+# uv run watchfiles "uv run main.py" physics_sim main.py
+###
+
 import logging
 
 import arcade

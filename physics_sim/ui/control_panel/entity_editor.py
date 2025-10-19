@@ -21,6 +21,7 @@ class EntityEditorPanel:
 
         self.layout = arcade.gui.UIBoxLayout(space_between=5, vertical=True)
         self.on_save = None
+        self.on_delete = None
         self._build_idle()
 
     def _build_idle(self):
@@ -179,8 +180,9 @@ class EntityEditorPanel:
 
     def _on_delete_clicked(self, event):
         """Handle delete button click."""
-        # This will be handled by the simulator
-        pass
+        if self.on_delete:
+            entity_id = self.entity_instance.id
+            self.on_delete(entity_id)
 
     def set_entity_type(self, entity_class: type):
         """Set entity type for adding."""

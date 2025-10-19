@@ -105,6 +105,7 @@ class Simulator(arcade.Window):
             self._on_edit_entity_button
         )
         self.control_section.entity_editor.on_save = self._on_entity_editor_save
+        self.control_section.entity_editor.on_delete = self._on_entity_editor_delete
 
         # Force manager callbacks
         self.force_manager_section.on_force_toggle = self._on_force_toggle
@@ -416,6 +417,19 @@ class Simulator(arcade.Window):
                     logger.error("Failed to update entity in engine")
             except Exception as e:
                 logger.error(f"Failed to update entity: {e}")
+
+    def _on_entity_editor_delete(self, entity_id):
+        """Handle save from entity editor panel.
+
+        Args:
+            params: Dictionary of updated entity parameters
+        """
+        logger.info(f"Delete entity {entity_id} from engine")
+        if entity_id:
+            try:
+                self.engine.remove_entity(entity_id)
+            except Exception as e:
+                logger.error(f"Failed to remove entity: {e}")
 
     def _on_force_toggle(self, force_class: type, enabled: bool):
         """Handle force activation/deactivation.

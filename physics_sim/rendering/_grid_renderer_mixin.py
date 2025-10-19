@@ -229,3 +229,48 @@ class GridRendererMixin:
             y += spacing
 
         return minor_lines, major_lines, labels
+
+    # Helper to sample physics-space grid intersections for force field rendering
+    def get_grid_sample_points(
+        self, include_minor: bool = True, custom_spacing: float | None = None
+    ) -> list[tuple[float, float]]:
+        spacing = (
+            max(self._calculate_grid_spacing(1), custom_spacing)
+            if custom_spacing is not None
+            else self._calculate_grid_spacing(1)
+        )
+        major_interval = 2
+
+        # Collect x and y coordinates for intersections
+        x_min = (
+            math.floor(self.screen_to_physics_x(self.region.left) / spacing) * spacing
+        )
+        x_max = (
+            math.ceil(self.screen_to_physics_x(self.region.right) / spacing) * spacing
+        )
+        y_min = (
+            math.floor(self.screen_to_physics_y(self.region.bottom) / spacing) * spacing
+        )
+        y_max = math.ceil(self.screen_to_physics_y(self.region.top) / spacing) * spacing
+
+        xs = []
+        x = x_min
+        while x <= x_max:
+            is_major = abs(x % (spacing * major_interval)) < 0.01
+            if include_minor or is_major or abs(x) < 1e-9:
+                xs.append(x)
+            x += spacing
+
+        ys = []
+        y = y_min
+        while y <= y_max:
+            is_major = abs(y % (spacing * major_interval)) < 0.01
+            if include_minor or is_major or abs(y) < 1e-9:
+                ys.append(y)
+            y += spacing
+
+        points: list[tuple[float, float]] = []
+        for xv in xs:
+            for yv in ys:
+                points.append((float(xv), float(yv)))
+        return points

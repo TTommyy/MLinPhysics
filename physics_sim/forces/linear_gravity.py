@@ -111,3 +111,10 @@ class LinearGravityForce(Force):
 
     def __repr__(self) -> str:
         return f"LinearGravityForce(acceleration={self.acceleration})"
+
+    def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
+        if sample_points is None or len(sample_points) == 0:
+            return {}
+        n = len(sample_points)
+        vectors = np.repeat(self.acceleration[np.newaxis, :], n, axis=0)
+        return {"vector_field": vectors}

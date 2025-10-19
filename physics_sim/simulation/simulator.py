@@ -102,6 +102,7 @@ class Simulator(arcade.Window):
         )
         self.control_section.display_controls.on_grid_toggle = self._on_grid_toggle
         self.control_section.display_controls.on_pause_toggle = self._on_pause_toggle
+        self.control_section.display_controls.on_forces_toggle = self._on_forces_toggle
         self.control_section.display_controls.on_edit_entity = (
             self._on_edit_entity_button
         )
@@ -208,7 +209,8 @@ class Simulator(arcade.Window):
 
         # Render viewport entities using data from engine
         render_data = self.engine.get_render_data()
-        self.viewport_section.render_with_data(render_data)
+        forces = self.engine.get_forces()
+        self.viewport_section.render_with_data(render_data, forces)
 
         # Update debug info in status display
         entity_counts = self.engine.get_entity_counts_by_type()
@@ -233,6 +235,14 @@ class Simulator(arcade.Window):
             self.control_section.display_controls.set_grid_enabled(
                 self.viewport_section.renderer.show_grid
             )
+
+        # Toggle forces overlay with F
+        elif key == arcade.key.F:
+            self.viewport_section.renderer.toggle_forces()
+            if hasattr(self.control_section, "display_controls"):
+                self.control_section.display_controls.set_forces_enabled(
+                    self.viewport_section.renderer.show_forces
+                )
 
         # Toggle add mode with A
         elif key == arcade.key.A:
@@ -395,6 +405,13 @@ class Simulator(arcade.Window):
 
     def _on_edit_entity_button(self):
         """Handle edit entity button click."""
+
+    def _on_forces_toggle(self):
+        """Handle forces overlay toggle from control panel."""
+        self.viewport_section.renderer.toggle_forces()
+        self.control_section.display_controls.set_forces_enabled(
+            self.viewport_section.renderer.show_forces
+        )
         entity_id = self.entity_selector.get_selected_entity()
         if entity_id:
             entity = self.engine.get_entity_for_editing(entity_id)

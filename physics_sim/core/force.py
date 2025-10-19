@@ -89,7 +89,6 @@ class Force(ABC):
         """
         return None
 
-
     @classmethod
     @abstractmethod
     def get_name(cls) -> str:
@@ -144,6 +143,20 @@ class Force(ABC):
             True if update successful, False otherwise
         """
         return True
+
+    def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
+        """Optional render data for visualization overlays and vector fields.
+
+        Args:
+            sample_points: Physics-space points (N,2) where acceleration field may be sampled.
+
+        Returns:
+            Dict with optional keys:
+              - "vector_field": np.ndarray shape (N,2) acceleration contributions at sample_points
+              - "overlays": list of overlay dicts
+        """
+        # Default: no visualization for this force
+        return {}
 
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(name={self.name})"

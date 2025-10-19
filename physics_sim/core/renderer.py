@@ -25,6 +25,7 @@ class Renderer(ABC):
 
         self.show_debug = True
         self.show_grid = True
+        self.show_forces = False
 
     @abstractmethod
     def physics_to_screen_x(self, x: float) -> float:
@@ -73,6 +74,10 @@ class Renderer(ABC):
     def toggle_grid(self) -> None:
         """Toggle grid display."""
         self.show_grid = not self.show_grid
+
+    def toggle_forces(self) -> None:
+        """Toggle forces overlay display."""
+        self.show_forces = not self.show_forces
 
     @abstractmethod
     def pause(self) -> None:

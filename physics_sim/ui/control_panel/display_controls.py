@@ -10,6 +10,7 @@ class DisplayControls:
 
         self.on_grid_toggle = None
         self.on_pause_toggle = None
+        self.on_forces_toggle = None
 
         self.layout = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
         self._build()
@@ -33,6 +34,15 @@ class DisplayControls:
         self.grid_button.on_click = self._toggle_grid
         self.layout.add(self.grid_button)
 
+        # Forces toggle (below grid)
+        self.forces_button = arcade.gui.UIFlatButton(
+            text="Forces: OFF",
+            width=self.button_width,
+            height=35,
+        )
+        self.forces_button.on_click = self._toggle_forces
+        self.layout.add(self.forces_button)
+
         # Pause toggle
         self.pause_button = arcade.gui.UIFlatButton(
             text="Pause: OFF",
@@ -54,6 +64,11 @@ class DisplayControls:
         if self.on_pause_toggle:
             self.on_pause_toggle()
 
+    def _toggle_forces(self, event):
+        """Toggle forces overlay display."""
+        if self.on_forces_toggle:
+            self.on_forces_toggle()
+
     def set_grid_enabled(self, enabled: bool):
         """Set grid display state."""
         self.grid_button.text = f"Grid: {'ON' if enabled else 'OFF'}"
@@ -62,6 +77,10 @@ class DisplayControls:
         """Set pause state programmatically."""
         self.is_paused = enabled
         self.pause_button.text = f"Pause: {'ON' if enabled else 'OFF'}"
+
+    def set_forces_enabled(self, enabled: bool):
+        """Set forces overlay state."""
+        self.forces_button.text = f"Forces: {'ON' if enabled else 'OFF'}"
 
     def get_layout(self) -> arcade.gui.UIBoxLayout:
         """Get the widget layout."""

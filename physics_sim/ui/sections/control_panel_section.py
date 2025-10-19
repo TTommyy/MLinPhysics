@@ -126,7 +126,6 @@ class ControlPanelSection(BaseSection):
 
         self.editor_ui_manager.add(editor_anchor)
 
-
     def on_draw(self):
         """Draw the control panel section with internal split layout."""
         # Setup UI if needed (on first draw when we have window context)
@@ -187,6 +186,9 @@ class ControlPanelSection(BaseSection):
         """Enable UI managers."""
         self.ui_manager.enable()
         self.editor_ui_manager.enable()
+
+    def set_forces_toggle_handler(self, handler):
+        self.display_controls.on_forces_toggle = handler
 
     def disable(self):
         """Disable UI managers."""

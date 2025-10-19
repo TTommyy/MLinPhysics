@@ -111,3 +111,36 @@ class CentralGravityForce(Force):
             return True
         except (ValueError, TypeError):
             return False
+
+    def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
+        if sample_points is None or len(sample_points) == 0:
+            vectors = None
+        else:
+            deltas = self.center - sample_points
+            r2 = np.sum(deltas**2, axis=1, keepdims=True)
+            r2 = np.maximum(r2, 1e-10)
+            r = np.sqrt(r2)
+            directions = deltas / r
+            # Acceleration (force per unit mass): a = G*M / r^2 in direction to center
+            magnitudes = self.G * self.center_mass / r2
+            vectors = directions * magnitudes
+
+        overlays = [
+            {
+                "kind": "circle",
+                "position": self.center.tolist(),
+                "radius": 0.12,
+                "color": (60, 60, 60),
+            },
+            {
+                "kind": "text",
+                "position": self.center.tolist(),
+                "text": f"M={self.center_mass}",
+                "color": (30, 30, 30),
+                "size": 10,
+            },
+        ]
+        result: dict[str, Any] = {"overlays": overlays}
+        if vectors is not None:
+            result["vector_field"] = vectors
+        return result

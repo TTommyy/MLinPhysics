@@ -2,13 +2,18 @@ import arcade
 
 from physics_sim.core import LayoutRegion, Renderer
 
+from ._forces_renderer_mixin import ForcesRendererMixin
 from ._grid_renderer_mixin import GridRendererMixin
 from ._pause_manager_mixin import PauseManagerMixin
 from ._shape_renderer_mixin import ShapeRendererMixin
 
 
 class ArcadeRenderer(
-    ShapeRendererMixin, GridRendererMixin, PauseManagerMixin, Renderer
+    ShapeRendererMixin,
+    GridRendererMixin,
+    ForcesRendererMixin,
+    PauseManagerMixin,
+    Renderer,
 ):
     """Renderer using Arcade library for visualization.
 

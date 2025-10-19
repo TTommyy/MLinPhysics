@@ -86,3 +86,14 @@ class WireConstraintPBDForce(Force):
             return True
         except (ValueError, TypeError):
             return False
+
+    def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
+        overlays = [
+            {
+                "kind": "dashed_circle",
+                "position": self.center.tolist(),
+                "radius": float(self.radius),
+                "color": (80, 80, 80),
+            }
+        ]
+        return {"overlays": overlays}

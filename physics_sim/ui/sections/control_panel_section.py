@@ -57,6 +57,10 @@ class ControlPanelSection(BaseSection):
         # We'll setup UI after we know the window dimensions
         self._ui_needs_setup = True
 
+        # Batched shapes cache
+        self._panel_shapes = None
+        self._panel_cache_key = None
+
     def _setup_ui(self, window_height: int):
         """Setup UI layout for controls section."""
         v_box = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
@@ -136,43 +140,74 @@ class ControlPanelSection(BaseSection):
                 self._setup_editor_ui(window.height)
                 self._ui_needs_setup = False
 
-        # Draw controls section (top)
-        arcade.draw_lrbt_rectangle_filled(
+        # Build/reuse batched shapes for panel backgrounds and borders
+        key = (
             self.controls_region.left,
             self.controls_region.right,
             self.controls_region.bottom,
             self.controls_region.top,
-            arcade.color.LIGHT_STEEL_BLUE,
-        )
-
-        # Draw editor section (bottom)
-        arcade.draw_lrbt_rectangle_filled(
             self.editor_region.left,
             self.editor_region.right,
             self.editor_region.bottom,
             self.editor_region.top,
-            arcade.color.WHITE_SMOKE,
-        )
-
-        # Draw separator line between sections
-        arcade.draw_line(
-            self.editor_region.left,
-            self.editor_region.top,
-            self.editor_region.right,
-            self.editor_region.top,
-            arcade.color.BLACK_LEATHER_JACKET,
-            4,
-        )
-
-        # Draw right border for entire panel
-        arcade.draw_line(
             self.region.right,
             self.region.bottom,
-            self.region.right,
             self.region.top,
-            (200, 200, 200),
-            2,
         )
+        if key != self._panel_cache_key:
+            self._panel_cache_key = key
+            shapes = arcade.shape_list.ShapeElementList()
+
+            # Controls background
+            cx = (self.controls_region.left + self.controls_region.right) * 0.5
+            cy = (self.controls_region.bottom + self.controls_region.top) * 0.5
+            cw = float(self.controls_region.right - self.controls_region.left)
+            ch = float(self.controls_region.top - self.controls_region.bottom)
+            shapes.append(
+                arcade.shape_list.create_rectangle_filled(
+                    cx, cy, cw, ch, arcade.color.LIGHT_STEEL_BLUE
+                )
+            )
+
+            # Editor background
+            ex = (self.editor_region.left + self.editor_region.right) * 0.5
+            ey = (self.editor_region.bottom + self.editor_region.top) * 0.5
+            ew = float(self.editor_region.right - self.editor_region.left)
+            eh = float(self.editor_region.top - self.editor_region.bottom)
+            shapes.append(
+                arcade.shape_list.create_rectangle_filled(
+                    ex, ey, ew, eh, arcade.color.WHITE_SMOKE
+                )
+            )
+
+            # Separator line
+            shapes.append(
+                arcade.shape_list.create_line(
+                    self.editor_region.left,
+                    self.editor_region.top,
+                    self.editor_region.right,
+                    self.editor_region.top,
+                    arcade.color.BLACK_LEATHER_JACKET,
+                    4,
+                )
+            )
+
+            # Right border line
+            shapes.append(
+                arcade.shape_list.create_line(
+                    self.region.right,
+                    self.region.bottom,
+                    self.region.right,
+                    self.region.top,
+                    (200, 200, 200),
+                    2,
+                )
+            )
+
+            self._panel_shapes = shapes
+
+        if self._panel_shapes is not None:
+            self._panel_shapes.draw()
 
         # Draw UI elements
         self.ui_manager.draw()

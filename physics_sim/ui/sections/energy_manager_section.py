@@ -31,6 +31,16 @@ class EnergyManagerSection(BaseSection):
         # Text objects
         self._create_text_objects()
 
+        # Cached shapes for static elements
+        self._plot_cache_key = None
+        self._plot_shapes_static = None  # border + grid lines
+
+        # Cached shapes for dynamic series
+        self._series_cache_key = None
+        self._series_shape_ke = None
+        self._series_shape_pe = None
+        self._series_shape_total = None
+
     def _create_text_objects(self):
         """Create reusable text objects."""
         x = self.region.x + 15
@@ -144,15 +154,50 @@ class EnergyManagerSection(BaseSection):
         if plot_width <= 0 or plot_height <= 0:
             return
 
-        # Draw plot border
-        arcade.draw_lrbt_rectangle_outline(
-            plot_left,
-            plot_right,
-            plot_bottom,
-            plot_top,
-            arcade.color.GRAY,
-            2,
-        )
+        # Build/reuse static plot shapes (border + grid)
+        key_static = (plot_left, plot_right, plot_bottom, plot_top)
+        if key_static != self._plot_cache_key:
+            self._plot_cache_key = key_static
+            shapes = arcade.shape_list.ShapeElementList()
+            # Border
+            shapes.append(
+                arcade.shape_list.create_rectangle_outline(
+                    (plot_left + plot_right) * 0.5,
+                    (plot_bottom + plot_top) * 0.5,
+                    float(plot_right - plot_left),
+                    float(plot_top - plot_bottom),
+                    arcade.color.GRAY,
+                    2,
+                )
+            )
+            # Horizontal grid
+            num_h_lines = 5
+            h_points: list[tuple[float, float]] = []
+            h_colors: list[tuple[int, int, int, int]] = []
+            for i in range(num_h_lines + 1):
+                y = plot_bottom + (plot_height * i / num_h_lines)
+                h_points.extend([(plot_left, y), (plot_right, y)])
+                h_colors.extend([(200, 200, 200, 255), (200, 200, 200, 255)])
+            if h_points:
+                shapes.append(
+                    arcade.shape_list.create_lines_with_colors(h_points, h_colors, 1)
+                )
+            # Vertical grid
+            num_v_lines = 6
+            v_points: list[tuple[float, float]] = []
+            v_colors: list[tuple[int, int, int, int]] = []
+            for i in range(num_v_lines + 1):
+                x = plot_left + (plot_width * i / num_v_lines)
+                v_points.extend([(x, plot_bottom), (x, plot_top)])
+                v_colors.extend([(200, 200, 200, 255), (200, 200, 200, 255)])
+            if v_points:
+                shapes.append(
+                    arcade.shape_list.create_lines_with_colors(v_points, v_colors, 1)
+                )
+            self._plot_shapes_static = shapes
+
+        if self._plot_shapes_static is not None:
+            self._plot_shapes_static.draw()
 
         # Calculate data ranges
         time_min = min(self.time_history)
@@ -171,54 +216,34 @@ class EnergyManagerSection(BaseSection):
         energy_max += energy_padding
         energy_range = energy_max - energy_min
 
-        # Draw grid lines (horizontal)
+        # Y-axis labels (text objects only)
         num_h_lines = 5
         for i in range(num_h_lines + 1):
             y = plot_bottom + (plot_height * i / num_h_lines)
-            arcade.draw_line(
-                plot_left,
-                y,
-                plot_right,
-                y,
-                (200, 200, 200),
-                1,
-            )
-            # Y-axis labels
             energy_value = energy_min + (energy_range * i / num_h_lines)
-            label = arcade.Text(
+            arcade.Text(
                 f"{energy_value:.1f}",
                 plot_left - 5,
                 y - 5,
                 arcade.color.BLACK,
                 8,
                 anchor_x="right",
-            )
-            label.draw()
+            ).draw()
 
-        # Draw grid lines (vertical)
+        # X-axis labels (text objects only)
         num_v_lines = 6
         for i in range(num_v_lines + 1):
             x = plot_left + (plot_width * i / num_v_lines)
-            arcade.draw_line(
-                x,
-                plot_bottom,
-                x,
-                plot_top,
-                (200, 200, 200),
-                1,
-            )
-            # X-axis labels
-            if i % 2 == 0:  # Only show every other label
+            if i % 2 == 0:
                 time_value = time_min + (time_range * i / num_v_lines)
-                label = arcade.Text(
+                arcade.Text(
                     f"{time_value:.1f}",
                     x,
                     plot_bottom - 15,
                     arcade.color.BLACK,
                     8,
                     anchor_x="center",
-                )
-                label.draw()
+                ).draw()
 
         # Helper function to convert data to screen coordinates
         def to_screen_coords(time_val: float, energy_val: float) -> tuple[float, float]:
@@ -226,28 +251,94 @@ class EnergyManagerSection(BaseSection):
             y = plot_bottom + ((energy_val - energy_min) / energy_range) * plot_height
             return x, y
 
-        # Draw energy lines
-        self._draw_energy_line(
-            self.time_history,
-            self.kinetic_history,
-            to_screen_coords,
-            arcade.uicolor.BLUE_PETER_RIVER,
-            2,
-        )
-        self._draw_energy_line(
-            self.time_history,
-            self.potential_history,
-            to_screen_coords,
-            arcade.uicolor.RED_POMEGRANATE,
-            2,
-        )
-        self._draw_energy_line(
-            self.time_history,
-            self.total_history,
-            to_screen_coords,
-            arcade.uicolor.GREEN_NEPHRITIS,
-            3,
-        )
+        # Build/reuse dynamic series shapes (recreate if vertex count changed)
+        def build_series(
+            points_color: tuple[int, int, int, int],
+            times: list[float],
+            vals: list[float],
+        ):
+            pts: list[tuple[float, float]] = []
+            cols: list[tuple[int, int, int, int]] = []
+            for i in range(len(times) - 1):
+                x1, y1 = to_screen_coords(times[i], vals[i])
+                x2, y2 = to_screen_coords(times[i + 1], vals[i + 1])
+                pts.extend([(x1, y1), (x2, y2)])
+                cols.extend([points_color, points_color])
+            return pts, cols
+
+        key_series = (len(self.time_history),)
+        if key_series != self._series_cache_key:
+            self._series_cache_key = key_series
+
+            def _rgba(color_like: tuple | list) -> tuple[int, int, int, int]:
+                vals = tuple(color_like)
+                if len(vals) == 3:
+                    return (int(vals[0]), int(vals[1]), int(vals[2]), 255)
+                if len(vals) == 4:
+                    return (int(vals[0]), int(vals[1]), int(vals[2]), int(vals[3]))
+                # Fallback to black
+                return (0, 0, 0, 255)
+
+            blue = _rgba(arcade.uicolor.BLUE_PETER_RIVER)
+            red = _rgba(arcade.uicolor.RED_POMEGRANATE)
+            green = _rgba(arcade.uicolor.GREEN_NEPHRITIS)
+
+            ke_pts, ke_cols = build_series(
+                blue, self.time_history, self.kinetic_history
+            )
+            pe_pts, pe_cols = build_series(
+                red, self.time_history, self.potential_history
+            )
+            tot_pts, tot_cols = build_series(
+                green, self.time_history, self.total_history
+            )
+
+            self._series_shape_ke = (
+                arcade.shape_list.create_lines_with_colors(ke_pts, ke_cols, 1)
+                if ke_pts
+                else None
+            )
+            self._series_shape_pe = (
+                arcade.shape_list.create_lines_with_colors(pe_pts, pe_cols, 1)
+                if pe_pts
+                else None
+            )
+            self._series_shape_total = (
+                arcade.shape_list.create_lines_with_colors(tot_pts, tot_cols, 1)
+                if tot_pts
+                else None
+            )
+        else:
+            # Update data in-place
+            def update_shape(shape, times: list[float], vals: list[float]):
+                if shape is None:
+                    return
+                data: list[float] = []
+                for i in range(len(times) - 1):
+                    x1, y1 = to_screen_coords(times[i], vals[i])
+                    x2, y2 = to_screen_coords(times[i + 1], vals[i + 1])
+                    cr, cg, cb, ca = shape.colors[0]
+                    data.extend([x1, y1, cr, cg, cb, ca, x2, y2, cr, cg, cb, ca])
+                from array import array as _array
+
+                shape.data = _array("f", data)
+                if shape.geometry is not None:
+                    shape.buffer.write(shape.data)
+
+            update_shape(self._series_shape_ke, self.time_history, self.kinetic_history)
+            update_shape(
+                self._series_shape_pe, self.time_history, self.potential_history
+            )
+            update_shape(
+                self._series_shape_total, self.time_history, self.total_history
+            )
+
+        if self._series_shape_ke:
+            self._series_shape_ke.draw()
+        if self._series_shape_pe:
+            self._series_shape_pe.draw()
+        if self._series_shape_total:
+            self._series_shape_total.draw()
 
         # Draw legend
         self._draw_legend(plot_right, plot_top)

@@ -32,6 +32,10 @@ class InventoryPanelSection(BaseSection):
         self._create_text_objects()
         self._create_pagination_ui()
 
+        # Cache for card background shapes per page
+        self._card_shapes_cache_key = None
+        self._card_shapes = None
+
     def _create_text_objects(self):
         """Create reusable text objects."""
         self.page_indicator_text = arcade.Text(
@@ -152,11 +156,61 @@ class InventoryPanelSection(BaseSection):
         )
         self.page_indicator_text.draw()
 
-        # Draw entities for current page
+        # Draw card backgrounds in batch and then overlay text per card
         entity_start_y = self.region.top - 80
         y_offset = entity_start_y
         card_spacing = 15
 
+        # Build/reuse shapes for current page backgrounds
+        key = (
+            self.current_page,
+            len(self._cached_page_entities),
+            self.panel_width,
+            self.panel_x,
+        )
+        if key != self._card_shapes_cache_key:
+            self._card_shapes_cache_key = key
+            shapes = arcade.shape_list.ShapeElementList()
+            y_tmp = y_offset
+            for data in self._cached_page_entities:
+                x = self.panel_x + 15
+                card_width = self.panel_width - 30
+                line_height = 14
+                padding = 12
+                base_lines = 5
+                force_lines = len(data.get("applied_forces", []))
+                card_lines = base_lines + (1 if force_lines > 0 else 0) + force_lines
+                card_height = (card_lines * line_height) + (2 * padding)
+                card_top = y_tmp
+                card_bottom = y_tmp - card_height
+                cx = x + card_width * 0.5
+                cy = (card_top + card_bottom) * 0.5
+                shapes.append(
+                    arcade.shape_list.create_rectangle_filled(
+                        cx,
+                        cy,
+                        float(card_width),
+                        float(card_height),
+                        arcade.uicolor.WHITE_SILVER,
+                    )
+                )
+                shapes.append(
+                    arcade.shape_list.create_rectangle_outline(
+                        cx,
+                        cy,
+                        float(card_width),
+                        float(card_height),
+                        arcade.uicolor.GRAY_ASBESTOS,
+                        2,
+                    )
+                )
+                y_tmp = card_bottom - card_spacing
+            self._card_shapes = shapes
+
+        if self._card_shapes is not None:
+            self._card_shapes.draw()
+
+        # Overlay text content per card
         for data in self._cached_page_entities:
             y_offset = self._render_entity_card(data, y_offset)
             y_offset -= card_spacing
@@ -176,7 +230,6 @@ class InventoryPanelSection(BaseSection):
             Updated Y offset
         """
         x = self.panel_x + 15
-        card_width = self.panel_width - 30
         line_height = 14
         padding = 12
 
@@ -189,25 +242,9 @@ class InventoryPanelSection(BaseSection):
         card_lines = base_lines + (1 if force_lines > 0 else 0) + force_lines
         card_height = (card_lines * line_height) + (2 * padding)
 
-        # Draw card background with border
+        # Card top/bottom used for text layout; background is prebatched
         card_top = y_offset
         card_bottom = y_offset - card_height
-
-        arcade.draw_lrbt_rectangle_filled(
-            x,
-            x + card_width,
-            card_bottom,
-            card_top,
-            arcade.uicolor.WHITE_SILVER,
-        )
-        arcade.draw_lrbt_rectangle_outline(
-            x,
-            x + card_width,
-            card_bottom,
-            card_top,
-            arcade.uicolor.GRAY_ASBESTOS,
-            2,
-        )
 
         # Start rendering content
         content_y = card_top - padding - 2

@@ -23,6 +23,7 @@ class Ball(PhysicalEntity):
         restitution: float = 1.0,
         drag_coefficient: float = 0.47,
         entity_id: str | None = None,
+        friction_coefficient: float = 0.5,
     ):
         """
         Args:
@@ -33,6 +34,7 @@ class Ball(PhysicalEntity):
             color: RGB color tuple (0-255 each)
             restitution: Coefficient of restitution (bounciness, 0-1)
             entity_id: Optional unique identifier
+            friction_coefficient: Coefficient of friction for collisions
         """
         super().__init__(position, velocity, mass, entity_id)
         self._radius = radius
@@ -41,6 +43,7 @@ class Ball(PhysicalEntity):
         self._drag_coefficient = drag_coefficient
         self._acceleration = np.array([0.0, 0.0])
         self._cross_sectional_area = self._calcualate_cross_sectional_area()
+        self._friction_coefficient = friction_coefficient
 
     @property
     def radius(self) -> float:
@@ -51,6 +54,13 @@ class Ball(PhysicalEntity):
         self._radius = value
         self._cross_sectional_area = self._calcualate_cross_sectional_area()
 
+    @property
+    def friction_coefficient(self) -> float:
+        return self._friction_coefficient
+
+    @friction_coefficient.setter
+    def friction_coefficient(self, value: float):
+        self._friction_coefficient = value
 
     @property
     def drag_coefficient(self) -> float:
@@ -95,6 +105,13 @@ class Ball(PhysicalEntity):
                 "default": (155, 100, 100),
                 "label": "Color",
             },
+            "friction_coefficient": {
+                "type": "float",
+                "default": 0.5,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Friction Coefficient",
+            },
         }
 
     def get_settable_parameters(self) -> dict[str, dict[str, Any]]:
@@ -136,6 +153,13 @@ class Ball(PhysicalEntity):
                 "default": self.color,
                 "label": "Color",
             },
+            "friction_coefficient": {
+                "type": "float",
+                "default": self.friction_coefficient,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Friction Coefficient",
+            },
         }
 
     def update_physics_data(self, config: dict[str, Any]) -> bool:
@@ -153,6 +177,8 @@ class Ball(PhysicalEntity):
                 self.restitution = float(config["restitution"])
             if "color" in config:
                 self.color = config["color"]
+            if "friction_coefficient" in config:
+                self.friction_coefficient = float(config["friction_coefficient"])
             return True
         except (ValueError, TypeError):
             return False

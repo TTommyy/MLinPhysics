@@ -18,6 +18,7 @@ class RectangleObstacle(Entity):
         height: float,
         color: tuple[int, int, int] = (100, 100, 100),
         entity_id: str | None = None,
+        friction_coefficient: float = 0.2,
     ):
         """
         Args:
@@ -26,6 +27,7 @@ class RectangleObstacle(Entity):
             height: Height of the rectangle
             color: RGB color tuple (0-255 each)
             entity_id: Optional unique identifier
+            friction_coefficient: Coefficient of friction for collisions
         """
         super().__init__(entity_id)
 
@@ -34,6 +36,15 @@ class RectangleObstacle(Entity):
         self.height = height
         self.color = color
         self.static = True
+        self._friction_coefficient = friction_coefficient
+
+    @property
+    def friction_coefficient(self) -> float:
+        return self._friction_coefficient
+
+    @friction_coefficient.setter
+    def friction_coefficient(self, value: float):
+        self._friction_coefficient = value
 
     @classmethod
     def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
@@ -48,7 +59,7 @@ class RectangleObstacle(Entity):
             },
             "height": {
                 "type": "float",
-                "default": 2.0,
+                "default": 0.3,
                 "min": 0.1,
                 "max": 10.0,
                 "label": "Height",
@@ -57,6 +68,13 @@ class RectangleObstacle(Entity):
                 "type": "color",
                 "default": (100, 100, 100),
                 "label": "Color",
+            },
+            "friction_coefficient": {
+                "type": "float",
+                "default": 0.2,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Friction Coefficient",
             },
         }
 
@@ -82,6 +100,13 @@ class RectangleObstacle(Entity):
                 "default": self.color,
                 "label": "Color",
             },
+            "friction_coefficient": {
+                "type": "float",
+                "default": self.friction_coefficient,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Friction Coefficient",
+            },
         }
 
     def update_physics_data(self, config: dict[str, Any]) -> bool:
@@ -93,6 +118,8 @@ class RectangleObstacle(Entity):
                 self.height = float(config["height"])
             if "color" in config:
                 self.color = config["color"]
+            if "friction_coefficient" in config:
+                self.friction_coefficient = float(config["friction_coefficient"])
             return True
         except (ValueError, TypeError):
             return False
@@ -133,6 +160,7 @@ class CircleObstacle(Entity):
         radius: float,
         color: tuple[int, int, int] = (100, 100, 100),
         entity_id: str | None = None,
+        friction_coefficient: float = 0.2,
     ):
         """
         Args:
@@ -140,12 +168,22 @@ class CircleObstacle(Entity):
             radius: Radius of the circle
             color: RGB color tuple (0-255 each)
             entity_id: Optional unique identifier
+            friction_coefficient: Coefficient of friction for collisions
         """
         super().__init__(entity_id)
         self.position = position
         self.radius = radius
         self.color = color
         self.static = True
+        self._friction_coefficient = friction_coefficient
+
+    @property
+    def friction_coefficient(self) -> float:
+        return self._friction_coefficient
+
+    @friction_coefficient.setter
+    def friction_coefficient(self, value: float):
+        self._friction_coefficient = value
 
     @classmethod
     def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
@@ -162,6 +200,13 @@ class CircleObstacle(Entity):
                 "type": "color",
                 "default": (100, 100, 100),
                 "label": "Color",
+            },
+            "friction_coefficient": {
+                "type": "float",
+                "default": 0.2,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Friction Coefficient",
             },
         }
 
@@ -180,6 +225,13 @@ class CircleObstacle(Entity):
                 "default": self.color,
                 "label": "Color",
             },
+            "friction_coefficient": {
+                "type": "float",
+                "default": self.friction_coefficient,
+                "min": 0.0,
+                "max": 1.0,
+                "label": "Friction Coefficient",
+            },
         }
 
     def update_physics_data(self, config: dict[str, Any]) -> bool:
@@ -189,6 +241,8 @@ class CircleObstacle(Entity):
                 self.radius = float(config["radius"])
             if "color" in config:
                 self.color = config["color"]
+            if "friction_coefficient" in config:
+                self.friction_coefficient = float(config["friction_coefficient"])
             return True
         except (ValueError, TypeError):
             return False

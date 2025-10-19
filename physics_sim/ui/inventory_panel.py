@@ -251,7 +251,7 @@ class InventoryPanel:
         texts["id_label"].y = y_offset
         texts["id_label"].draw()
 
-        texts["id_value"].text = f"{data['id'][:12]}..."
+        texts["id_value"].text = f"{data['id'][:12]}"
         texts["id_value"].x = x + 80
         texts["id_value"].y = y_offset
         texts["id_value"].draw()

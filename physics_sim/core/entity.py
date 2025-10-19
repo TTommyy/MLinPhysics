@@ -8,7 +8,7 @@ class Entity(ABC):
     """Base class for all simulation entities."""
 
     def __init__(self, entity_id: str | None = None):
-        self.id = entity_id or id(self).__str__()
+        self.id = (entity_id or id(self).__str__())[:8]
 
     @classmethod
     def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
@@ -39,7 +39,6 @@ class PhysicalEntity(Entity):
             tuple[str, np.ndarray]
         ] = []  # (force_name, force_vector)
 
-
     @property
     def drag_coefficient(self) -> float:
         """Coefficient of drag for air resistance calculations.
@@ -52,6 +51,15 @@ class PhysicalEntity(Entity):
     def cross_sectional_area() -> float:
         """Cross sectional area for drag fore calculation"""
         pass
+
+    @property
+    def friction_coefficient(self) -> float:
+        """Coefficient of friction for collision dampening.
+
+        Subclasses should override this property to provide entity-specific friction.
+        Default is 0.0 (no friction).
+        """
+        return 0.0
 
     @property
     def thrust_enabled(self) -> bool:

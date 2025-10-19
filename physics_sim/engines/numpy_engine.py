@@ -49,6 +49,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
         self._restitutions: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
         self._drag_coeffs: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
         self._cross_sections: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
+        self._friction_coeffs: np.ndarray = np.zeros(self._capacity, dtype=np.float64)
 
         # Type-specific properties (parallel arrays indexed by entity index)
         self._type_properties: dict[EntityType, dict] = {
@@ -60,10 +61,12 @@ class NumpyPhysicsEngine(PhysicsEngine):
                 "width": np.zeros(self._capacity, dtype=np.float64),
                 "height": np.zeros(self._capacity, dtype=np.float64),
                 "color": [None] * self._capacity,
+                "friction_coefficient": np.zeros(self._capacity, dtype=np.float64),
             },
             EntityType.CIRCLE_OBSTACLE: {
                 "radius": np.zeros(self._capacity, dtype=np.float64),
                 "color": [None] * self._capacity,
+                "friction_coefficient": np.zeros(self._capacity, dtype=np.float64),
             },
         }
 
@@ -96,6 +99,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
         self._restitutions = np.resize(self._restitutions, new_capacity)
         self._drag_coeffs = np.resize(self._drag_coeffs, new_capacity)
         self._cross_sections = np.resize(self._cross_sections, new_capacity)
+        self._friction_coeffs = np.resize(self._friction_coeffs, new_capacity)
 
         # Grow type-specific arrays
         for _, props in self._type_properties.items():
@@ -155,6 +159,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
         self._restitutions[idx] = ball.restitution
         self._drag_coeffs[idx] = ball.drag_coefficient
         self._cross_sections[idx] = ball.cross_sectional_area
+        self._friction_coeffs[idx] = ball.friction_coefficient
 
         # Ball-specific properties
         self._type_properties[EntityType.BALL]["radius"][idx] = ball.radius
@@ -184,6 +189,10 @@ class NumpyPhysicsEngine(PhysicsEngine):
         self._type_properties[EntityType.RECTANGLE_OBSTACLE]["color"][idx] = (
             obstacle.color
         )
+        self._type_properties[EntityType.RECTANGLE_OBSTACLE]["friction_coefficient"][
+            idx
+        ] = obstacle.friction_coefficient
+        self._friction_coeffs[idx] = obstacle.friction_coefficient
 
     def _add_circle_obstacle(self, obstacle, idx: int):
         """Add a CircleObstacle entity to arrays."""
@@ -204,6 +213,9 @@ class NumpyPhysicsEngine(PhysicsEngine):
             obstacle.radius
         )
         self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][idx] = obstacle.color
+        self._type_properties[EntityType.CIRCLE_OBSTACLE]["friction_coefficient"][
+            idx
+        ] = obstacle.friction_coefficient
 
     def remove_entity(self, entity_id: str) -> None:
         """Remove an entity from the simulation."""
@@ -226,6 +238,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
             self._restitutions[idx] = self._restitutions[last_idx]
             self._drag_coeffs[idx] = self._drag_coeffs[last_idx]
             self._cross_sections[idx] = self._cross_sections[last_idx]
+            self._friction_coeffs[idx] = self._friction_coeffs[last_idx]
 
             # Copy type-specific properties
             for entity_type, props in self._type_properties.items():
@@ -424,6 +437,32 @@ class NumpyPhysicsEngine(PhysicsEngine):
                         positions[i] += correction_i
                         positions[j] += correction_j
 
+                    # Apply friction impulse
+                    if self.friction_enabled:
+                        # Calculate tangential velocity component
+                        relative_velocity = velocities[i] - velocities[j]
+                        v_normal_component = np.dot(relative_velocity, normal) * normal
+                        tangential_velocity = relative_velocity - v_normal_component
+                        tangential_speed = np.linalg.norm(tangential_velocity)
+
+                        if tangential_speed > 1e-10:
+                            # Tangential direction
+                            tangent = tangential_velocity / tangential_speed
+
+                            # Calculate friction coefficient (average of both balls)
+                            friction_coeff = (
+                                self._friction_coeffs[ball_indices[i]]
+                                + self._friction_coeffs[ball_indices[j]]
+                            ) / 2.0
+
+                            # Friction impulse limited by normal impulse magnitude
+                            friction_scalar = friction_coeff * abs(impulse_scalar)
+                            friction_impulse = friction_scalar * tangent
+
+                            # Apply friction impulse
+                            velocities[i] -= friction_impulse / masses[i]
+                            velocities[j] += friction_impulse / masses[j]
+
         # Write back updated values
         self._positions[ball_indices] = positions
         self._velocities[ball_indices] = velocities
@@ -489,6 +528,37 @@ class NumpyPhysicsEngine(PhysicsEngine):
                     overlap = min_distance - distance
                     if overlap > 0:
                         ball_positions[i] += normal * overlap
+
+                    # Apply friction impulse if friction is enabled
+                    if self.friction_enabled:
+                        # Calculate tangential velocity component
+                        tangential_velocity = (
+                            ball_velocities[i]
+                            - np.dot(ball_velocities[i], normal) * normal
+                        )
+                        tangential_speed = np.linalg.norm(tangential_velocity)
+
+                        if tangential_speed > 1e-10:
+                            # Tangential direction
+                            tangent = tangential_velocity / tangential_speed
+
+                            # Calculate friction coefficient (average of ball and obstacle)
+                            friction_coeff = (
+                                self._friction_coeffs[ball_idx]
+                                + self._friction_coeffs[circle_idx]
+                            ) / 2.0
+
+                            # Normal impulse magnitude for restitution
+                            normal_impulse = (1.0 + ball_restitutions[i]) * abs(
+                                v_normal
+                            )
+
+                            # Friction impulse limited by normal impulse magnitude
+                            friction_impulse_magnitude = friction_coeff * normal_impulse
+                            friction_impulse = friction_impulse_magnitude * tangent
+
+                            # Apply friction impulse (only to ball, obstacle is static)
+                            ball_velocities[i] -= friction_impulse
 
         # Write back updated values
         self._positions[ball_indices] = ball_positions
@@ -594,6 +664,39 @@ class NumpyPhysicsEngine(PhysicsEngine):
                     # Position correction (push ball out of obstacle)
                     if overlap > 0:
                         ball_positions[i] += normal * overlap
+
+                    # Apply friction impulse if friction is enabled
+                    if self.friction_enabled:
+                        # Calculate tangential velocity component
+                        tangential_velocity = (
+                            ball_velocities[i]
+                            - np.dot(ball_velocities[i], normal) * normal
+                        )
+                        tangential_speed = np.linalg.norm(tangential_velocity)
+
+                        if tangential_speed > 1e-10:
+                            # Tangential direction
+                            tangent = tangential_velocity / tangential_speed
+
+                            # Calculate friction coefficient (average of ball and obstacle)
+                            friction_coeff = (
+                                self._friction_coeffs[ball_idx]
+                                + self._type_properties[EntityType.RECTANGLE_OBSTACLE][
+                                    "friction_coefficient"
+                                ][j]
+                            ) / 2.0
+
+                            # Normal impulse magnitude for restitution
+                            normal_impulse = (1.0 + ball_restitutions[i]) * abs(
+                                v_normal
+                            )
+
+                            # Friction impulse limited by normal impulse magnitude
+                            friction_impulse_magnitude = friction_coeff * normal_impulse
+                            friction_impulse = friction_impulse_magnitude * tangent
+
+                            # Apply friction impulse (only to ball, obstacle is static)
+                            ball_velocities[i] -= friction_impulse
 
         # Write back updated values
         self._positions[ball_indices] = ball_positions
@@ -726,6 +829,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
                 color=self._type_properties[EntityType.BALL]["color"][idx],
                 restitution=float(self._restitutions[idx]),
                 drag_coefficient=float(self._drag_coeffs[idx]),
+                friction_coefficient=float(self._friction_coeffs[idx]),
                 entity_id=entity_id,
             )
         elif entity_type == EntityType.RECTANGLE_OBSTACLE:
@@ -740,6 +844,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
                 color=self._type_properties[EntityType.RECTANGLE_OBSTACLE]["color"][
                     idx
                 ],
+                friction_coefficient=float(self._friction_coeffs[idx]),
                 entity_id=entity_id,
             )
         elif entity_type == EntityType.CIRCLE_OBSTACLE:
@@ -749,6 +854,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
                     self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][idx]
                 ),
                 color=self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][idx],
+                friction_coefficient=float(self._friction_coeffs[idx]),
                 entity_id=entity_id,
             )
 
@@ -769,6 +875,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
             self._restitutions[idx] = entity.restitution
             self._drag_coeffs[idx] = entity.drag_coefficient
             self._cross_sections[idx] = entity.cross_sectional_area
+            self._friction_coeffs[idx] = entity.friction_coefficient
             self._type_properties[EntityType.BALL]["radius"][idx] = entity.radius
             self._type_properties[EntityType.BALL]["color"][idx] = entity.color
         elif isinstance(entity, RectangleObstacle):
@@ -782,6 +889,10 @@ class NumpyPhysicsEngine(PhysicsEngine):
             self._type_properties[EntityType.RECTANGLE_OBSTACLE]["color"][idx] = (
                 entity.color
             )
+            self._type_properties[EntityType.RECTANGLE_OBSTACLE][
+                "friction_coefficient"
+            ][idx] = entity.friction_coefficient
+            self._friction_coeffs[idx] = entity.friction_coefficient
         elif isinstance(entity, CircleObstacle):
             self._positions[idx] = entity.position
             self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][idx] = (
@@ -790,6 +901,10 @@ class NumpyPhysicsEngine(PhysicsEngine):
             self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][idx] = (
                 entity.color
             )
+            self._type_properties[EntityType.CIRCLE_OBSTACLE]["friction_coefficient"][
+                idx
+            ] = entity.friction_coefficient
+            self._friction_coeffs[idx] = entity.friction_coefficient
         else:
             return False
 

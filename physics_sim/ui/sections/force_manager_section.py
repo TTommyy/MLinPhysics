@@ -285,7 +285,7 @@ class ForceManagerSection(BaseSection):
 
     def _on_checkbox_click(self, force_class: type):
         """Handle checkbox click to toggle force."""
-        force_name = force_class.__name__
+        force_name = force_class.get_name()
         is_active = force_name in self._active_forces
         # logger.info(f"Checkbox clicked: {force_name}, current active={is_active}")
         if self.on_force_toggle:
@@ -335,11 +335,11 @@ class ForceManagerSection(BaseSection):
 
     def update_active_forces(self, active_forces: list[object]):
         """Update the list of currently active force instances."""
-        new_active = {type(f).__name__: f for f in active_forces}
+        new_active = {type(f).get_name(): f for f in active_forces}
 
         # Validate edited force still exists
         if self.edited_force_instance:
-            edited_force_name = type(self.edited_force_instance).__name__
+            edited_force_name = type(self.edited_force_instance).get_name()
             if edited_force_name not in new_active:
                 # Force was removed, clear editor
                 self._cached_field_values.clear()

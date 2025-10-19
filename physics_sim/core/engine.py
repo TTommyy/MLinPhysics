@@ -1,4 +1,7 @@
 from abc import ABC, abstractmethod
+from typing import Any
+
+import numpy as np
 
 from .entity import Entity
 from .force import Force
@@ -147,5 +150,19 @@ class PhysicsEngine(ABC):
                 - 'kinetic': Total kinetic energy (Joules)
                 - 'potential': Total potential energy (Joules)
                 - 'total': Total energy (Joules)
+        """
+        pass
+
+    @abstractmethod
+    def get_forces_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
+        """Compute vector field and overlays for active forces at sample points.
+
+        Args:
+            sample_points: Nx2 array of world-space points to sample
+
+        Returns:
+            dict with optional keys:
+            - 'vector_field': Nx2 np.ndarray of vectors (sum across forces)
+            - 'overlays': list of overlay dicts for renderer
         """
         pass

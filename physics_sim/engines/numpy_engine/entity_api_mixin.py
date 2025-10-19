@@ -1,7 +1,15 @@
 import numpy as np
+
 from physics_sim.core import Entity
-from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
-from .types import EntityType
+from physics_sim.entities import (
+    AnchorPoint,
+    Ball,
+    CircleObstacle,
+    ExplosionEmitter,
+    RectangleObstacle,
+)
+
+from .types import ENTITY_CLASS_TO_TYPE, EntityType
 
 
 class EntityApiMixin:
@@ -10,14 +18,19 @@ class EntityApiMixin:
             self._grow_arrays()
         idx = self._n_entities
         entity_id = entity.id
-        if isinstance(entity, Ball):
-            self._add_ball(entity, idx)
-        elif isinstance(entity, RectangleObstacle):
-            self._add_rectangle_obstacle(entity, idx)
-        elif isinstance(entity, CircleObstacle):
-            self._add_circle_obstacle(entity, idx)
-        else:
+        etype = ENTITY_CLASS_TO_TYPE.get(type(entity))
+        if etype is None:
             raise ValueError(f"Unsupported entity type: {type(entity)}")
+        if etype == EntityType.BALL:
+            self._add_ball(entity, idx)
+        elif etype == EntityType.RECTANGLE_OBSTACLE:
+            self._add_rectangle_obstacle(entity, idx)
+        elif etype == EntityType.CIRCLE_OBSTACLE:
+            self._add_circle_obstacle(entity, idx)
+        elif etype == EntityType.ANCHOR_POINT:
+            self._add_anchor_point(entity, idx)
+        elif etype == EntityType.EXPLOSION_EMITTER:
+            self._add_explosion_emitter(entity, idx)
         self._entity_ids[idx] = entity_id
         self._id_to_index[entity_id] = idx
         self._n_entities += 1
@@ -82,6 +95,26 @@ class EntityApiMixin:
             idx
         ] = obstacle.friction_coefficient
 
+    def _add_anchor_point(self, anchor: AnchorPoint, idx: int) -> None:
+        self._positions[idx] = anchor.position
+        self._entity_types[idx] = EntityType.ANCHOR_POINT
+        self._is_static[idx] = True
+        self._dynamic_mask[idx] = False
+        self._type_properties[EntityType.ANCHOR_POINT]["radius"][idx] = anchor.radius
+        self._type_properties[EntityType.ANCHOR_POINT]["color"][idx] = anchor.color
+
+    def _add_explosion_emitter(self, emitter: ExplosionEmitter, idx: int) -> None:
+        self._positions[idx] = emitter.position
+        self._entity_types[idx] = EntityType.EXPLOSION_EMITTER
+        self._is_static[idx] = True
+        self._dynamic_mask[idx] = False
+        self._type_properties[EntityType.EXPLOSION_EMITTER]["radius"][idx] = (
+            emitter.radius
+        )
+        self._type_properties[EntityType.EXPLOSION_EMITTER]["color"][idx] = (
+            emitter.color
+        )
+
     def remove_entity(self, entity_id: str) -> None:
         if entity_id not in self._id_to_index:
             return
@@ -116,9 +149,13 @@ class EntityApiMixin:
         self._id_to_index.clear()
 
     def get_supported_entity_types(self) -> list[type]:
-        from physics_sim.entities import Ball, CircleObstacle, RectangleObstacle
-
-        return [Ball, RectangleObstacle, CircleObstacle]
+        return [
+            Ball,
+            RectangleObstacle,
+            CircleObstacle,
+            AnchorPoint,
+            ExplosionEmitter,
+        ]
 
     def get_entity_for_editing(self, entity_id: str) -> Entity | None:
         if entity_id not in self._id_to_index:
@@ -160,6 +197,24 @@ class EntityApiMixin:
                 ),
                 color=self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][idx],
                 friction_coefficient=float(self._friction_coeffs[idx]),
+                entity_id=entity_id,
+            )
+        if entity_type == EntityType.ANCHOR_POINT:
+            return AnchorPoint(
+                position=self._positions[idx].copy(),
+                radius=float(
+                    self._type_properties[EntityType.ANCHOR_POINT]["radius"][idx]
+                ),
+                color=self._type_properties[EntityType.ANCHOR_POINT]["color"][idx],
+                entity_id=entity_id,
+            )
+        if entity_type == EntityType.EXPLOSION_EMITTER:
+            return ExplosionEmitter(
+                position=self._positions[idx].copy(),
+                radius=float(
+                    self._type_properties[EntityType.EXPLOSION_EMITTER]["radius"][idx]
+                ),
+                color=self._type_properties[EntityType.EXPLOSION_EMITTER]["color"][idx],
                 entity_id=entity_id,
             )
         return None
@@ -205,6 +260,20 @@ class EntityApiMixin:
                 idx
             ] = entity.friction_coefficient
             self._friction_coeffs[idx] = entity.friction_coefficient
+        elif isinstance(entity, AnchorPoint):
+            self._positions[idx] = entity.position
+            self._type_properties[EntityType.ANCHOR_POINT]["radius"][idx] = (
+                entity.radius
+            )
+            self._type_properties[EntityType.ANCHOR_POINT]["color"][idx] = entity.color
+        elif isinstance(entity, ExplosionEmitter):
+            self._positions[idx] = entity.position
+            self._type_properties[EntityType.EXPLOSION_EMITTER]["radius"][idx] = (
+                entity.radius
+            )
+            self._type_properties[EntityType.EXPLOSION_EMITTER]["color"][idx] = (
+                entity.color
+            )
         else:
             return False
         return True

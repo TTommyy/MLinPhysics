@@ -89,6 +89,7 @@ class Simulator(arcade.Window):
         self._energy_timer = 0.0
         self._inventory_timer = 0.0
         self._simulation_time = 0.0
+        self._forces_render_cache: dict | None = None
 
         arcade.set_background_color(arcade.color.PLATINUM)
 
@@ -194,6 +195,12 @@ class Simulator(arcade.Window):
             active_forces = self.engine.get_forces()
 
             self.force_manager_section.update_active_forces(active_forces)
+            if self.viewport_section.renderer.show_forces:
+                points_list = self.viewport_section.renderer.get_grid_sample_points()
+                sample_points = np.asarray(points_list, dtype=np.float64)
+                self._forces_render_cache = self.engine.get_forces_render_data(
+                    sample_points
+                )
             self._inventory_timer = 0.0
 
     def on_draw(self):
@@ -209,8 +216,9 @@ class Simulator(arcade.Window):
 
         # Render viewport entities using data from engine
         render_data = self.engine.get_render_data()
-        forces = self.engine.get_forces()
-        self.viewport_section.render_with_data(render_data, forces)
+        if self.viewport_section.renderer.show_forces and self._forces_render_cache:
+            self.viewport_section.renderer.render_forces_data(self._forces_render_cache)
+        self.viewport_section.render_with_data(render_data)
 
         # Update debug info in status display
         entity_counts = self.engine.get_entity_counts_by_type()

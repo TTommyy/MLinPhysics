@@ -37,8 +37,6 @@ class ViewportSection(BaseSection):
             render_data: List of entity data dicts from engine
         """
         self.renderer.render_grid()
-        if forces:
-            self.renderer.render_forces(forces)
         self.renderer.render_entities(render_data)
 
     def on_update(self, delta_time: float):

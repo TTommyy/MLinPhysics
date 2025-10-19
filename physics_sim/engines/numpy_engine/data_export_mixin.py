@@ -1,4 +1,5 @@
 import numpy as np
+
 from .types import EntityType
 
 
@@ -44,6 +45,24 @@ class DataExportMixin:
                     "color": self._type_properties[EntityType.CIRCLE_OBSTACLE]["color"][
                         i
                     ],
+                })
+            elif entity_type == EntityType.ANCHOR_POINT:
+                base.update({
+                    "render_type": "circle_static",
+                    "radius": float(
+                        self._type_properties[EntityType.ANCHOR_POINT]["radius"][i]
+                    ),
+                    "color": self._type_properties[EntityType.ANCHOR_POINT]["color"][i],
+                })
+            elif entity_type == EntityType.EXPLOSION_EMITTER:
+                base.update({
+                    "render_type": "circle_static",
+                    "radius": float(
+                        self._type_properties[EntityType.EXPLOSION_EMITTER]["radius"][i]
+                    ),
+                    "color": self._type_properties[EntityType.EXPLOSION_EMITTER][
+                        "color"
+                    ][i],
                 })
             render_data.append(base)
         return render_data

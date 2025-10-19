@@ -37,6 +37,12 @@ class Force(ABC):
             dt: Time step
             **kwargs: Additional entity-specific properties (drag_coeffs, cross_sections, etc.)
 
+        Special kwargs:
+            engine_state: Optional dict provided by engine for visualization or
+                context-dependent forces. Keys may include:
+                - 'all_positions', 'all_velocities', 'all_masses'
+                - 'entity_types', 'type_properties', 'dynamic_mask'
+
         Returns:
             Force vectors for all entities, shape (n, 2)
         """
@@ -145,14 +151,13 @@ class Force(ABC):
         return True
 
     def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
-        """Optional render data for visualization overlays and vector fields.
+        """Optional render data for visualization overlays only.
 
         Args:
             sample_points: Physics-space points (N,2) where acceleration field may be sampled.
 
         Returns:
             Dict with optional keys:
-              - "vector_field": np.ndarray shape (N,2) acceleration contributions at sample_points
               - "overlays": list of overlay dicts
         """
         # Default: no visualization for this force

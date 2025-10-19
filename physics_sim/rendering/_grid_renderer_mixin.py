@@ -234,6 +234,9 @@ class GridRendererMixin:
     def get_grid_sample_points(
         self, include_minor: bool = True, custom_spacing: float | None = None
     ) -> list[tuple[float, float]]:
+        if self._grid_sample_points:
+            return self._grid_sample_points
+
         spacing = (
             max(self._calculate_grid_spacing(1), custom_spacing)
             if custom_spacing is not None
@@ -275,4 +278,5 @@ class GridRendererMixin:
         for xv in xs:
             for yv in ys:
                 points.append((float(xv), float(yv)))
+        self._grid_sample_points = points
         return points

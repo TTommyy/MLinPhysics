@@ -26,6 +26,7 @@ class Renderer(ABC):
         self.show_debug = True
         self.show_grid = True
         self.show_forces = False
+        self._grid_sample_points = None
 
     @abstractmethod
     def physics_to_screen_x(self, x: float) -> float:

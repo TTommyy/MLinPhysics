@@ -170,3 +170,24 @@ class ForcesRendererMixin:
         self._draw_vector_field(sample_points, accumulated, spacing)
         if overlays:
             self._draw_overlays(overlays)
+
+    # New path: render with precomputed engine data
+    def render_forces_data(self, data: dict) -> None:
+        if not self.show_forces:
+            return
+
+        vectors = data.get("vector_field")
+        overlays = data.get("overlays", [])
+
+        # Recreate sample points grid based on current view for consistent scaling
+        points_list = self.get_grid_sample_points()
+        if not points_list:
+            return
+        sample_points = np.asarray(points_list, dtype=np.float64)
+        if isinstance(vectors, np.ndarray) and vectors.shape == sample_points.shape:
+            spacing = self._force_field_spacing_override
+            if spacing is None:
+                spacing = self._calculate_grid_spacing(1)
+            self._draw_vector_field(sample_points, vectors, spacing)
+        if isinstance(overlays, list) and overlays:
+            self._draw_overlays(overlays)

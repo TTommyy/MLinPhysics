@@ -24,6 +24,10 @@ class ForcesRendererMixin:
         # Defaults specific to this mixin
         self._force_field_include_minor: bool = True
         self._force_field_spacing_override: float | None = None
+        # Persistent GPU shapes for vector field to avoid per-frame allocations
+        self._vf_cache_key: tuple | None = None
+        self._vf_shape_lines = None  # shafts as GL_LINES with per-vertex colors
+        self._vf_shape_tris = None  # arrowheads as triangles
 
     def set_force_field_include_minor(self, include_minor: bool) -> None:
         self._force_field_include_minor = include_minor
@@ -38,7 +42,6 @@ class ForcesRendererMixin:
             return
         # Scale vectors to a reasonable on-screen length
         max_len = VECTOR_MAX_LENGTH_RATIO * spacing
-        # Compute a normalization factor based on magnitudes (force strength proxy)
         mags = np.linalg.norm(vectors, axis=1)
         if np.all(mags == 0):
             return
@@ -54,45 +57,113 @@ class ForcesRendererMixin:
             b = int(round(c0[2] + (c1[2] - c0[2]) * t))
             return (r, g, b)
 
+        # Build unified shafts (GL_LINES, width=1) to enable buffer updates
+        line_points: list[tuple[float, float]] = []
+        line_colors: list[tuple[int, int, int, int]] = []
+
+        tri_points: list[tuple[float, float]] = []
+        tri_colors: list[tuple[int, int, int, int]] = []
+
         for (px, py), vec, mag in zip(sample_points, vectors, mags):
-            # Normalize strength 0..1 for styling
             strength = float(mag / (max_mag + 1e-9))
-            color = _lerp_color(VECTOR_COLOR_LOW, VECTOR_COLOR_HIGH, strength)
-            thickness = VECTOR_THICKNESS_MIN + (
-                (VECTOR_THICKNESS_MAX - VECTOR_THICKNESS_MIN) * strength
-            )
+            r, g, b = _lerp_color(VECTOR_COLOR_LOW, VECTOR_COLOR_HIGH, strength)
+            col = (r, g, b, 255)
 
-            # World to screen endpoints
-            sx = self.physics_to_screen_x(px)
-            sy = self.physics_to_screen_y(py)
-            ex = self.physics_to_screen_x(px + vec[0] * scale)
-            ey = self.physics_to_screen_y(py + vec[1] * scale)
+            sx = self.physics_to_screen_x(float(px))
+            sy = self.physics_to_screen_y(float(py))
+            ex = self.physics_to_screen_x(float(px + vec[0] * scale))
+            ey = self.physics_to_screen_y(float(py + vec[1] * scale))
 
-            # Main shaft
-            arcade.draw_line(sx, sy, ex, ey, color, thickness)
+            line_points.extend([(sx, sy), (ex, ey)])
+            line_colors.extend([col, col])
 
-            # Direction arrowhead (triangle) at the end
             dx = ex - sx
             dy = ey - sy
             seg_len = math.hypot(dx, dy)
-            if seg_len > 1e-6:
-                head_len = max(
-                    ARROW_HEAD_MIN_PX,
-                    min(ARROW_HEAD_MAX_PX, seg_len * 0.35),
+            if seg_len <= 1e-6:
+                continue
+            head_len = max(
+                ARROW_HEAD_MIN_PX,
+                min(ARROW_HEAD_MAX_PX, seg_len * 0.35),
+            )
+            head_w = head_len * ARROW_HEAD_WIDTH_RATIO
+            ux = dx / seg_len
+            uy = dy / seg_len
+            bx = ex - ux * head_len
+            by = ey - uy * head_len
+            px_off = -uy * (head_w * 0.5)
+            py_off = ux * (head_w * 0.5)
+            x1 = bx + px_off
+            y1 = by + py_off
+            x2 = bx - px_off
+            y2 = by - py_off
+            tri_points.extend([(ex, ey), (x1, y1), (x2, y2)])
+            tri_colors.extend([col, col, col])
+
+        # Cache key based on number of vertices (stable if viewport/grid stable)
+        key = (len(line_points), len(tri_points))
+        if key != self._vf_cache_key:
+            self._vf_cache_key = key
+            self._vf_shape_lines = (
+                arcade.shape_list.create_lines_with_colors(
+                    line_points, line_colors, line_width=1
                 )
-                head_w = head_len * ARROW_HEAD_WIDTH_RATIO
-                ux = dx / seg_len
-                uy = dy / seg_len
-                bx = ex - ux * head_len
-                by = ey - uy * head_len
-                # Perpendicular
-                px_off = -uy * (head_w * 0.5)
-                py_off = ux * (head_w * 0.5)
-                x1 = bx + px_off
-                y1 = by + py_off
-                x2 = bx - px_off
-                y2 = by - py_off
-                arcade.draw_triangle_filled(ex, ey, x1, y1, x2, y2, color)
+                if line_points
+                else None
+            )
+            self._vf_shape_tris = (
+                arcade.shape_list.create_triangles_filled_with_colors(
+                    tri_points, tri_colors
+                )
+                if tri_points
+                else None
+            )
+        else:
+            # Update buffers in-place to avoid allocations
+            if self._vf_shape_lines is not None:
+                # Build interleaved float array [x,y,r,g,b,a] * N
+                data_lines = []
+                for (x, y), (cr, cg, cb, ca) in zip(line_points, line_colors):
+                    data_lines.extend([
+                        float(x),
+                        float(y),
+                        float(cr),
+                        float(cg),
+                        float(cb),
+                        float(ca),
+                    ])
+                from array import array as _array
+
+                self._vf_shape_lines.data = _array("f", data_lines)
+                if self._vf_shape_lines.geometry is None:
+                    # First draw will create buffer with new data
+                    pass
+                else:
+                    self._vf_shape_lines.buffer.write(self._vf_shape_lines.data)
+
+            if self._vf_shape_tris is not None:
+                data_tris = []
+                for (x, y), (cr, cg, cb, ca) in zip(tri_points, tri_colors):
+                    data_tris.extend([
+                        float(x),
+                        float(y),
+                        float(cr),
+                        float(cg),
+                        float(cb),
+                        float(ca),
+                    ])
+                from array import array as _array
+
+                self._vf_shape_tris.data = _array("f", data_tris)
+                if self._vf_shape_tris.geometry is None:
+                    pass
+                else:
+                    self._vf_shape_tris.buffer.write(self._vf_shape_tris.data)
+
+        if self._vf_shape_lines is not None:
+            self._vf_shape_lines.draw()
+        if self._vf_shape_tris is not None:
+            self._vf_shape_tris.draw()
 
     def _draw_overlays(self, overlays: list[dict[str, Any]]) -> None:
         for item in overlays:

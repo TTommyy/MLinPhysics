@@ -6,6 +6,19 @@ import arcade
 class GridRendererMixin:
     """Mixin for rendering coordinate grid and axis labels."""
 
+    # Grid styling constants
+    _GRID_MAJOR_INTERVAL: int = 2
+    _GRID_TARGET_PIXELS: int = 50
+    _MINOR_GRID_COLOR: tuple[int, int, int] = (240, 240, 240)
+    _MAJOR_GRID_COLOR: tuple[int, int, int] = (200, 200, 200)
+    _AXIS_COLOR: tuple[int, int, int] = (100, 100, 100)
+    _ORIGIN_COLOR: tuple[int, int, int] = (80, 80, 255)
+    _LABEL_COLOR: tuple[int, int, int] = (60, 60, 60)
+    _MINOR_GRID_WIDTH: float = 1.0
+    _MAJOR_GRID_WIDTH: float = 2.0
+    _AXIS_WIDTH: float = 3.0
+    _ORIGIN_RADIUS_PX: float = 4.0
+
     def render_grid(self, base_spacing: int = 1) -> None:
         """Render coordinate grid with major/minor lines and labels.
 
@@ -17,78 +30,162 @@ class GridRendererMixin:
 
         # Calculate adaptive spacing based on scale
         spacing = self._calculate_grid_spacing(base_spacing)
-        major_interval = 2  # Major grid every 5 units
 
-        # Color scheme
-        minor_grid_color = (240, 240, 240)
-        major_grid_color = (200, 200, 200)
-        axis_color = (100, 100, 100)
-        origin_color = (80, 80, 255)
-        label_color = (60, 60, 60)
+        # Prepare cache containers
+        if not hasattr(self, "_grid_cache_key"):
+            self._grid_cache_key = None
+            self._grid_shape_minor_v = None
+            self._grid_shape_minor_h = None
+            self._grid_shape_major_v = None
+            self._grid_shape_major_h = None
+            self._grid_shape_axes = None
+            self._grid_shape_origin = None
+            self._grid_text_labels: list[arcade.Text] = []
 
-        # Get axis positions
-        screen_x_axis = self.physics_to_screen_x(0)
-        screen_y_axis = self.physics_to_screen_y(0)
-
-        # Collect grid lines
-        minor_v, major_v, labels_v = self._collect_vertical_lines(
-            spacing, major_interval
+        key = (
+            float(self.scale),
+            float(self.region.left),
+            float(self.region.right),
+            float(self.region.bottom),
+            float(self.region.top),
+            float(spacing),
         )
-        minor_h, major_h, labels_h = self._collect_horizontal_lines(
-            spacing, major_interval
-        )
 
-        # Draw minor grid first (background)
-        if minor_v:
-            arcade.draw_lines(minor_v, minor_grid_color, 1)
-        if minor_h:
-            arcade.draw_lines(minor_h, minor_grid_color, 1)
+        if key != self._grid_cache_key:
+            # Rebuild shapes and labels
+            self._grid_cache_key = key
 
-        # Draw major grid
-        if major_v:
-            arcade.draw_lines(major_v, major_grid_color, 2)
-        if major_h:
-            arcade.draw_lines(major_h, major_grid_color, 2)
+            # Get axis positions
+            screen_x_axis = self.physics_to_screen_x(0)
+            screen_y_axis = self.physics_to_screen_y(0)
 
-        # Draw axes (thicker, more prominent)
-        if self.region.left <= screen_x_axis <= self.region.right:
-            arcade.draw_line(
-                screen_x_axis,
-                self.region.bottom,
-                screen_x_axis,
-                self.region.top,
-                axis_color,
-                3,
+            # Collect grid lines
+            minor_v, major_v, labels_v = self._collect_vertical_lines(
+                spacing, self._GRID_MAJOR_INTERVAL
             )
-        if self.region.bottom <= screen_y_axis <= self.region.top:
-            arcade.draw_line(
-                self.region.left,
-                screen_y_axis,
-                self.region.right,
-                screen_y_axis,
-                axis_color,
-                3,
+            minor_h, major_h, labels_h = self._collect_horizontal_lines(
+                spacing, self._GRID_MAJOR_INTERVAL
             )
 
-        # Draw origin marker
-        origin_x = self.physics_to_screen_x(0)
-        origin_y = self.physics_to_screen_y(0)
-        if (
-            self.region.left <= origin_x <= self.region.right
-            and self.region.bottom <= origin_y <= self.region.top
-        ):
-            arcade.draw_circle_filled(origin_x, origin_y, 4, origin_color)
+            # Build line shapes
+            def _mk_colors(
+                num: int, rgb: tuple[int, int, int]
+            ) -> list[tuple[int, int, int, int]]:
+                r, g, b = rgb
+                return [(r, g, b, 255)] * num
 
-        # Draw labels (only for major grid lines)
-        for label_text, x, y in labels_v + labels_h:
-            arcade.Text(
-                label_text,
-                x,
-                y,
-                label_color,
-                9,  # Larger font
-                bold=True,
-            ).draw()
+            self._grid_shape_minor_v = (
+                arcade.shape_list.create_lines_with_colors(
+                    minor_v,
+                    _mk_colors(len(minor_v), self._MINOR_GRID_COLOR),
+                    self._MINOR_GRID_WIDTH,
+                )
+                if minor_v
+                else None
+            )
+            self._grid_shape_minor_h = (
+                arcade.shape_list.create_lines_with_colors(
+                    minor_h,
+                    _mk_colors(len(minor_h), self._MINOR_GRID_COLOR),
+                    self._MINOR_GRID_WIDTH,
+                )
+                if minor_h
+                else None
+            )
+            self._grid_shape_major_v = (
+                arcade.shape_list.create_lines_with_colors(
+                    major_v,
+                    _mk_colors(len(major_v), self._MAJOR_GRID_COLOR),
+                    self._MAJOR_GRID_WIDTH,
+                )
+                if major_v
+                else None
+            )
+            self._grid_shape_major_h = (
+                arcade.shape_list.create_lines_with_colors(
+                    major_h,
+                    _mk_colors(len(major_h), self._MAJOR_GRID_COLOR),
+                    self._MAJOR_GRID_WIDTH,
+                )
+                if major_h
+                else None
+            )
+
+            # Axes
+            axes_shapes = arcade.shape_list.ShapeElementList()
+            has_axis = False
+            if self.region.left <= screen_x_axis <= self.region.right:
+                axes_shapes.append(
+                    arcade.shape_list.create_line(
+                        screen_x_axis,
+                        self.region.bottom,
+                        screen_x_axis,
+                        self.region.top,
+                        self._AXIS_COLOR,
+                        self._AXIS_WIDTH,
+                    )
+                )
+                has_axis = True
+            if self.region.bottom <= screen_y_axis <= self.region.top:
+                axes_shapes.append(
+                    arcade.shape_list.create_line(
+                        self.region.left,
+                        screen_y_axis,
+                        self.region.right,
+                        screen_y_axis,
+                        self._AXIS_COLOR,
+                        self._AXIS_WIDTH,
+                    )
+                )
+                has_axis = True
+            self._grid_shape_axes = axes_shapes if has_axis else None
+
+            # Origin marker
+            origin_x = self.physics_to_screen_x(0)
+            origin_y = self.physics_to_screen_y(0)
+            if (
+                self.region.left <= origin_x <= self.region.right
+                and self.region.bottom <= origin_y <= self.region.top
+            ):
+                self._grid_shape_origin = arcade.shape_list.create_ellipse_filled(
+                    origin_x,
+                    origin_y,
+                    self._ORIGIN_RADIUS_PX * 2,
+                    self._ORIGIN_RADIUS_PX * 2,
+                    self._ORIGIN_COLOR,
+                )
+            else:
+                self._grid_shape_origin = None
+
+            # Labels (Text objects are faster than draw_text)
+            self._grid_text_labels = []
+            for label_text, x, y in labels_v + labels_h:
+                self._grid_text_labels.append(
+                    arcade.Text(
+                        label_text,
+                        x,
+                        y,
+                        self._LABEL_COLOR,
+                        9,
+                        bold=True,
+                    )
+                )
+
+        # Draw cached shapes
+        if self._grid_shape_minor_v:
+            self._grid_shape_minor_v.draw()
+        if self._grid_shape_minor_h:
+            self._grid_shape_minor_h.draw()
+        if self._grid_shape_major_v:
+            self._grid_shape_major_v.draw()
+        if self._grid_shape_major_h:
+            self._grid_shape_major_h.draw()
+        if self._grid_shape_axes:
+            self._grid_shape_axes.draw()
+        if self._grid_shape_origin:
+            self._grid_shape_origin.draw()
+        for t in self._grid_text_labels:
+            t.draw()
 
     def _calculate_grid_spacing(self, base_spacing: float) -> float:
         """Calculate adaptive grid spacing based on zoom level.
@@ -99,8 +196,8 @@ class GridRendererMixin:
         # Calculate how many pixels per physics unit
         pixels_per_unit = self.scale
 
-        # Target: grid lines every 30-80 pixels
-        target_pixels = 50
+        # Target: grid lines every ~_GRID_TARGET_PIXELS pixels
+        target_pixels = self._GRID_TARGET_PIXELS
 
         # Calculate ideal spacing
         ideal_spacing = target_pixels / pixels_per_unit

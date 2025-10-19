@@ -87,6 +87,7 @@ class Simulator(arcade.Window):
 
         # Track energy
         self._energy_timer = 0.0
+        self._inventory_timer = 0.0
         self._simulation_time = 0.0
 
         arcade.set_background_color(arcade.color.PLATINUM)
@@ -171,15 +172,20 @@ class Simulator(arcade.Window):
             self._fps_timer = 0.0
 
         # Update energy tracking
-        self._energy_timer += delta_time
-        if self._energy_timer >= self._config.energy_calc_interval:
-            energies = self.engine.get_energies()
-            self.energy_manager_section.add_energy_sample(
-                ke=energies["kinetic"],
-                pe=energies["potential"],
-                total=energies["total"],
-                time=self._simulation_time,
-            )
+        if not self.engine.is_paused():
+            self._energy_timer += delta_time
+            if self._energy_timer >= self._config.energy_calc_interval:
+                energies = self.engine.get_energies()
+                self.energy_manager_section.add_energy_sample(
+                    ke=energies["kinetic"],
+                    pe=energies["potential"],
+                    total=energies["total"],
+                    time=self._simulation_time,
+                )
+                self._energy_timer = 0.0
+
+        self._inventory_timer += delta_time
+        if self._inventory_timer >= self._config.inventory_update_interval:
             inventory_data = self.engine.get_inventory_data()
             self.inventory_section.render_with_data(inventory_data)
 
@@ -187,8 +193,7 @@ class Simulator(arcade.Window):
             active_forces = self.engine.get_forces()
 
             self.force_manager_section.update_active_forces(active_forces)
-
-            self._energy_timer = 0.0
+            self._inventory_timer = 0.0
 
     def on_draw(self):
         """Render the simulation."""

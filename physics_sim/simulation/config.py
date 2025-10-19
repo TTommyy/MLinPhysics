@@ -29,7 +29,8 @@ class SimulationConfig:
 
     # Debug settings
     show_debug_info: bool = True
-    energy_calc_interval: float = 1.0  # Frequency of energy calculations in seconds
+    energy_calc_interval: float = 0.05  # Frequency of energy calculations in seconds
+    inventory_update_interval: float = 2.0
 
     def create_layout_manager(self):
         """Create a LayoutManager instance from this config.

@@ -56,7 +56,7 @@ class SimulationConfig:
         # Use default layout percentages
         control_panel_width_pct = 0.15
         inventory_panel_width_pct = 0.15
-        viewport_height_pct = 0.40
+        viewport_height_pct = 0.56
 
         # Calculate actual viewport dimensions
         control_width = int(width * control_panel_width_pct)

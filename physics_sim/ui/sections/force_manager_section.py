@@ -11,7 +11,8 @@ from physics_sim.ui.utils import format_vector_for_display, parse_vector_from_te
 logger = logging.getLogger(__name__)
 
 
-EDIT_HORIZONTAL_OFFSET = 100
+EDIT_HORIZONTAL_OFFSET_BEGIN = 350
+EDIT_HORIZONTAL_OFFSET = 250
 
 
 class ForceManagerSection(BaseSection):
@@ -196,15 +197,24 @@ class ForceManagerSection(BaseSection):
 
         # Create input fields for each parameter
         y_offset = self.region.center_y + 20
-        for param_name, param_meta in self.force_parameters.items():
+        param_offset = 40
+        items_in_col = 2
+        col_idx = 0
+        for i, (param_name, param_meta) in enumerate(self.force_parameters.items()):
             param_type = param_meta.get("type")
             label = param_meta.get("label", param_name)
             default = param_meta.get("default")
-
+            col_idx = i // items_in_col
+            if i != 0 and i % items_in_col == 0:
+                y_offset = self.region.center_y + 20
             # Store label as Text object
             self._force_param_label_texts[param_name] = arcade.Text(
                 label,
-                int(self.region.left + EDIT_HORIZONTAL_OFFSET),
+                int(
+                    self.region.left
+                    + EDIT_HORIZONTAL_OFFSET_BEGIN
+                    + col_idx * EDIT_HORIZONTAL_OFFSET
+                ),
                 int(y_offset),
                 arcade.color.BLACK,
                 9,
@@ -212,11 +222,11 @@ class ForceManagerSection(BaseSection):
             )
             y_offset -= 10
             if param_type == "vector":
-                self._add_vector_field(param_name, default, y_offset)
+                self._add_vector_field(param_name, default, y_offset, col_idx)
             else:
-                self._add_input_field(param_name, default, y_offset)
+                self._add_input_field(param_name, default, y_offset, col_idx)
 
-            y_offset -= 40
+            y_offset -= param_offset
 
         # Add Save and Cancel buttons below parameters
         button_y = y_offset - 20
@@ -225,7 +235,11 @@ class ForceManagerSection(BaseSection):
 
         self._create_button(
             "Save",
-            int(self.region.left + EDIT_HORIZONTAL_OFFSET),
+            int(
+                self.region.left
+                + EDIT_HORIZONTAL_OFFSET_BEGIN
+                + col_idx * EDIT_HORIZONTAL_OFFSET
+            ),
             int(button_y),
             button_width,
             button_height,
@@ -234,40 +248,56 @@ class ForceManagerSection(BaseSection):
 
         self._create_button(
             "Cancel",
-            int(self.region.left + EDIT_HORIZONTAL_OFFSET + button_width + 10),
+            int(
+                self.region.left
+                + EDIT_HORIZONTAL_OFFSET_BEGIN
+                + button_width
+                + 10
+                + col_idx * EDIT_HORIZONTAL_OFFSET
+            ),
             int(button_y),
             button_width,
             button_height,
             self._on_cancel_clicked,
         )
 
-    def _create_input_field(self, text: str, y_offset: float) -> arcade.gui.UIInputText:
+    def _create_input_field(
+        self, text: str, y_offset: float, col_idx: int
+    ) -> arcade.gui.UIInputText:
         """Create a standard input field."""
         return arcade.gui.UIInputText(
             text=text,
-            x=int(self.region.left + EDIT_HORIZONTAL_OFFSET),
+            x=int(
+                self.region.left
+                + EDIT_HORIZONTAL_OFFSET_BEGIN
+                + (col_idx * EDIT_HORIZONTAL_OFFSET)
+            ),
             y=int(y_offset - 30),
             width=200,
             height=25,
             text_color=arcade.color.BLACK_BEAN,
         )
 
-    def _add_input_field(self, param_name: str, default_value: Any, y_offset: float):
+    def _add_input_field(
+        self, param_name: str, default_value: Any, y_offset: float, col_idx: int
+    ):
         """Add an input field for a scalar parameter."""
         # Use cached value if available, otherwise use default
         text_value = self._cached_field_values.get(param_name, str(default_value))
-        inp = self._create_input_field(text_value, y_offset)
+        inp = self._create_input_field(text_value, y_offset, col_idx)
         self.force_param_fields[param_name] = inp
         self.ui_manager.add(inp)
 
-    def _add_vector_field(self, param_name: str, default_value: list, y_offset: float):
+    def _add_vector_field(
+        self, param_name: str, default_value: list, y_offset: float, col_idx: int
+    ):
         """Add a vector input field for [x, y] parameters."""
         # Use cached value if available, otherwise format default
         if param_name in self._cached_field_values:
             text_value = self._cached_field_values[param_name]
         else:
             text_value = format_vector_for_display(default_value)
-        inp = self._create_input_field(text_value, y_offset)
+        inp = self._create_input_field(text_value, y_offset, col_idx)
         self.force_vector_fields[param_name] = inp
         self.ui_manager.add(inp)
 

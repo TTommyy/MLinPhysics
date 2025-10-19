@@ -243,15 +243,17 @@ class GridRendererMixin:
 
         # Collect x and y coordinates for intersections
         x_min = (
-            math.floor(self.screen_to_physics_x(self.region.left) / spacing) * spacing
+            math.ceil(self.screen_to_physics_x(self.region.left) / spacing) * spacing
         )
         x_max = (
-            math.ceil(self.screen_to_physics_x(self.region.right) / spacing) * spacing
+            math.floor(self.screen_to_physics_x(self.region.right) / spacing) * spacing
         )
         y_min = (
-            math.floor(self.screen_to_physics_y(self.region.bottom) / spacing) * spacing
+            math.ceil(self.screen_to_physics_y(self.region.bottom) / spacing) * spacing
         )
-        y_max = math.ceil(self.screen_to_physics_y(self.region.top) / spacing) * spacing
+        y_max = (
+            math.floor(self.screen_to_physics_y(self.region.top) / spacing) * spacing
+        )
 
         xs = []
         x = x_min

@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 EDIT_HORIZONTAL_OFFSET = 100
 
+
 class ForceManagerSection(BaseSection):
     """Top panel section for managing forces with pagination and parameter editing."""
 
@@ -45,6 +46,7 @@ class ForceManagerSection(BaseSection):
         self.edit_buttons: dict[str, arcade.gui.UIFlatButton] = {}
         self.force_param_fields: dict[str, arcade.gui.UIInputText] = {}
         self.force_vector_fields: dict[str, arcade.gui.UIInputText] = {}
+        self._cached_field_values: dict[str, str] = {}
 
         self._page_text = arcade.Text(
             "Page 1/1",
@@ -71,6 +73,14 @@ class ForceManagerSection(BaseSection):
 
     def _clear_ui(self):
         """Clear all UI elements and caches."""
+        # Save current field values if editing
+        if self.edited_force_instance:
+            self._cached_field_values.clear()
+            for name, field in self.force_param_fields.items():
+                self._cached_field_values[name] = field.text
+            for name, field in self.force_vector_fields.items():
+                self._cached_field_values[name] = field.text
+
         self.ui_manager.clear()
         self.force_checkboxes.clear()
         self.edit_buttons.clear()
@@ -244,13 +254,19 @@ class ForceManagerSection(BaseSection):
 
     def _add_input_field(self, param_name: str, default_value: Any, y_offset: float):
         """Add an input field for a scalar parameter."""
-        inp = self._create_input_field(str(default_value), y_offset)
+        # Use cached value if available, otherwise use default
+        text_value = self._cached_field_values.get(param_name, str(default_value))
+        inp = self._create_input_field(text_value, y_offset)
         self.force_param_fields[param_name] = inp
         self.ui_manager.add(inp)
 
     def _add_vector_field(self, param_name: str, default_value: list, y_offset: float):
         """Add a vector input field for [x, y] parameters."""
-        text_value = format_vector_for_display(default_value)
+        # Use cached value if available, otherwise format default
+        if param_name in self._cached_field_values:
+            text_value = self._cached_field_values[param_name]
+        else:
+            text_value = format_vector_for_display(default_value)
         inp = self._create_input_field(text_value, y_offset)
         self.force_vector_fields[param_name] = inp
         self.ui_manager.add(inp)
@@ -286,11 +302,13 @@ class ForceManagerSection(BaseSection):
             params = self.get_force_parameters()
             if self.on_force_params_update:
                 self.on_force_params_update(self.edited_force_instance, params)
+            self._cached_field_values.clear()
             self.edited_force_instance = None
             self._build_ui()
 
     def _on_cancel_clicked(self, event):
         """Handle cancel button click."""
+        self._cached_field_values.clear()
         self.edited_force_instance = None
         self._build_ui()
 
@@ -317,7 +335,24 @@ class ForceManagerSection(BaseSection):
 
     def update_active_forces(self, active_forces: list[object]):
         """Update the list of currently active force instances."""
-        self._active_forces = {type(f).__name__: f for f in active_forces}
+        new_active = {type(f).__name__: f for f in active_forces}
+
+        # Validate edited force still exists
+        if self.edited_force_instance:
+            edited_force_name = type(self.edited_force_instance).__name__
+            if edited_force_name not in new_active:
+                # Force was removed, clear editor
+                self._cached_field_values.clear()
+                self.edited_force_instance = None
+
+        # Check if anything changed
+        if set(new_active.keys()) == set(self._active_forces.keys()):
+            # If actively editing, skip rebuild to preserve input
+            if self.edited_force_instance:
+                self._active_forces = new_active
+                return
+
+        self._active_forces = new_active
         self._build_ui()
 
     def set_force_for_editing(self, force_instance: object):

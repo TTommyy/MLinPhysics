@@ -39,7 +39,6 @@ class Ball(PhysicalEntity):
         self.color = color
         self.restitution = restitution
         self._drag_coefficient = drag_coefficient
-        self._drag_enabled = True
         self._acceleration = np.array([0.0, 0.0])
         self._cross_sectional_area = self._calcualate_cross_sectional_area()
 
@@ -52,9 +51,6 @@ class Ball(PhysicalEntity):
         self._radius = value
         self._cross_sectional_area = self._calcualate_cross_sectional_area()
 
-    @property
-    def drag_enabled(self) -> bool:
-        return self._drag_enabled
 
     @property
     def drag_coefficient(self) -> float:
@@ -64,77 +60,13 @@ class Ball(PhysicalEntity):
     def cross_sectional_area(self) -> float:
         return self._cross_sectional_area
 
-    def apply_force(self, force: np.ndarray):
-        """Apply a force using F = ma."""
-        self._acceleration = self._acceleration + (force / self.mass)
-
-    def reset_acceleration(self):
-        """Reset accumulated acceleration (called after integration)."""
-        self._acceleration = np.array([0.0, 0.0])
-
-    def get_acceleration(self) -> np.ndarray:
-        """Get current acceleration."""
-        return self._acceleration
-
-    def get_render_data(self) -> dict[str, Any]:
-        """Return rendering information for this ball."""
-        if isinstance(self.position, np.ndarray):
-            position_tuple = tuple(self.position)
-        else:
-            position_tuple = self.position.to_tuple()
-
-        return {
-            "type": "circle",
-            "position": position_tuple,
-            "radius": self.radius,
-            "color": self.color,
-        }
-
-    def get_physics_data(self) -> dict[str, Any]:
-        """Get detailed physics data including ball-specific properties."""
-        data = super().get_physics_data()
-
-        if isinstance(self._acceleration, np.ndarray):
-            acceleration_tuple = tuple(self._acceleration)
-            acceleration_magnitude = float(np.linalg.norm(self._acceleration))
-        else:
-            acceleration_tuple = self._acceleration.to_tuple()
-            acceleration_magnitude = self._acceleration.magnitude()
-
-        data.update({
-            "type": "Ball",
-            "radius": self.radius,
-            "acceleration": acceleration_tuple,
-            "acceleration_magnitude": acceleration_magnitude,
-            "restitution": self.restitution,
-        })
-        return data
-
-    def get_config_data(self) -> dict[str, Any]:
-        data = super().get_physics_data()
-
-        if isinstance(self._acceleration, np.ndarray):
-            acceleration_tuple = tuple(self._acceleration)
-            acceleration_magnitude = float(np.linalg.norm(self._acceleration))
-        else:
-            acceleration_tuple = self._acceleration.to_tuple()
-            acceleration_magnitude = self._acceleration.magnitude()
-
-        data.update({
-            "radius": self.radius,
-            "acceleration": acceleration_tuple,
-            "acceleration_magnitude": acceleration_magnitude,
-            "restitution": self.restitution,
-        })
-        return data
-
     @classmethod
     def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
         """Get default settable parameters for Ball creation."""
         return {
             "radius": {
                 "type": "float",
-                "default": 0.5,
+                "default": 0.2,
                 "min": 0.1,
                 "max": 2.0,
                 "label": "Radius",
@@ -148,7 +80,7 @@ class Ball(PhysicalEntity):
             },
             "velocity": {
                 "type": "vector",
-                "default": [0.0, 0.0],
+                "default": [10.0, 10.0],
                 "label": "Velocity (m/s)",
             },
             "restitution": {
@@ -160,7 +92,7 @@ class Ball(PhysicalEntity):
             },
             "color": {
                 "type": "color",
-                "default": (255, 0, 0),
+                "default": (155, 100, 100),
                 "label": "Color",
             },
         }
@@ -214,7 +146,7 @@ class Ball(PhysicalEntity):
             if "mass" in config:
                 self.mass = float(config["mass"])
             if "position" in config:
-                self.velocity = np.array(config["position"])
+                self.position = np.array(config["position"])
             if "velocity" in config:
                 self.velocity = np.array(config["velocity"])
             if "restitution" in config:

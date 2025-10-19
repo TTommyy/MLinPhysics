@@ -44,7 +44,7 @@ class Simulator(arcade.Window):
             height=config.screen_height,
             title=config.window_title,
             update_rate=(1 / fps),
-            draw_rate=(1/fps),
+            draw_rate=(1 / fps),
             gl_version=(3, 3),
             antialiasing=True,
         )
@@ -311,14 +311,10 @@ class Simulator(arcade.Window):
                     if entity:
                         entity_type = entity.__class__.__name__
                         logger.info(f"Entity selected: {entity_type}")
-                        self.control_section.display_controls.set_entity_selected(
-                            True, entity_type
-                        )
                         # Load entity into editor for editing
                         self.control_section.entity_editor.set_entity_instance(entity)
                 else:
                     logger.debug("No entity selected at click position")
-                    self.control_section.display_controls.set_entity_selected(False)
                     # Clear editor if nothing selected
                     if not self.add_mode:
                         self.control_section.entity_editor.clear()
@@ -390,9 +386,6 @@ class Simulator(arcade.Window):
         # Clear selection and update UI when toggling pause
         if not self.engine.is_paused():
             self.entity_selector.clear_selection()
-            self.control_section.display_controls.set_entity_selected(False)
-        # Update edit button availability
-        self.control_section.display_controls.update_edit_button_availability()
 
     def _on_edit_entity_button(self):
         """Handle edit entity button click."""

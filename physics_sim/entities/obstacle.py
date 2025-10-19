@@ -35,21 +35,6 @@ class RectangleObstacle(Entity):
         self.color = color
         self.static = True
 
-    def get_render_data(self) -> dict[str, Any]:
-        """Return rendering information for this obstacle."""
-        if isinstance(self.position, np.ndarray):
-            position_tuple = tuple(self.position)
-        else:
-            position_tuple = self.position.to_tuple()
-
-        return {
-            "type": "rectangle",
-            "position": position_tuple,
-            "width": self.width,
-            "height": self.height,
-            "color": self.color,
-        }
-
     @classmethod
     def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
         """Get default settable parameters for RectangleObstacle creation."""
@@ -161,20 +146,6 @@ class CircleObstacle(Entity):
         self.radius = radius
         self.color = color
         self.static = True
-
-    def get_render_data(self) -> dict[str, Any]:
-        """Return rendering information for this obstacle."""
-        if isinstance(self.position, np.ndarray):
-            position_tuple = tuple(self.position)
-        else:
-            position_tuple = self.position.to_tuple()
-
-        return {
-            "type": "circle_static",
-            "position": position_tuple,
-            "radius": self.radius,
-            "color": self.color,
-        }
 
     @classmethod
     def get_default_parameters(cls) -> dict[str, dict[str, Any]]:

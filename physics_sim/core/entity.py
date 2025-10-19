@@ -10,11 +10,6 @@ class Entity(ABC):
     def __init__(self, entity_id: str | None = None):
         self.id = entity_id or id(self).__str__()
 
-    @abstractmethod
-    def get_render_data(self) -> dict[str, Any]:
-        """Return data needed for rendering this entity."""
-        pass
-
     @classmethod
     def get_default_parameters(cls) -> dict[str, dict[str, Any]]:
         """Get default settable parameters for entity creation.
@@ -44,19 +39,6 @@ class PhysicalEntity(Entity):
             tuple[str, np.ndarray]
         ] = []  # (force_name, force_vector)
 
-    @abstractmethod
-    def apply_force(self, force: np.ndarray):
-        """Apply a force to this entity."""
-        pass
-
-    @property
-    def drag_enabled(self) -> bool:
-        """Whether drag force is currently enabled.
-
-        Subclasses without drag force should override this property.
-        Default is Ture.
-        """
-        True
 
     @property
     def drag_coefficient(self) -> float:
@@ -102,28 +84,6 @@ class PhysicalEntity(Entity):
     def clear_force_tracking(self):
         """Clear tracked forces (called each frame)."""
         self._applied_forces.clear()
-
-    def get_physics_data(self) -> dict[str, Any]:
-        """Get detailed physics data for this entity.
-
-        Returns:
-            Dictionary containing mass, position, velocity, acceleration, and forces
-        """
-        return {
-            "id": self.id,
-            "mass": self.mass,
-            "position": self.position,
-            "velocity": self.velocity,
-            "speed": float(np.linalg.norm(self.velocity)),
-            "applied_forces": [
-                {
-                    "name": name,
-                    "vector": tuple(vec),
-                    "magnitude": float(np.linalg.norm(vec)),
-                }
-                for name, vec in self._applied_forces
-            ],
-        }
 
     @abstractmethod
     def get_settable_parameters(self) -> dict[str, dict[str, Any]]:

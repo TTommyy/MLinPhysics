@@ -2,7 +2,7 @@ from typing import Any
 
 import numpy as np
 
-from physics_sim.core import Entity, Force, PhysicalEntity
+from physics_sim.core import Force
 
 
 class LinearGravityForce(Force):
@@ -21,16 +21,6 @@ class LinearGravityForce(Force):
         self.acceleration = (
             acceleration if acceleration is not None else np.array([0.0, -9.81])
         )
-
-    def should_apply_to(self, entity: Entity) -> bool:
-        """Gravity applies to all physical entities."""
-        return isinstance(entity, PhysicalEntity)
-
-    def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
-        """Calculate gravitational force: F = m * g."""
-        if isinstance(entity, PhysicalEntity):
-            return self.acceleration * entity.mass
-        return np.array([0.0, 0.0])
 
     def apply_to_batch(
         self,

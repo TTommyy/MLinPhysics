@@ -6,12 +6,10 @@ class DisplayControls:
 
     def __init__(self, button_width: int = 220):
         self.is_paused = False
-        self.entity_selected = False
         self.button_width = button_width
 
         self.on_grid_toggle = None
         self.on_pause_toggle = None
-        self.on_edit_entity = None
 
         self.layout = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
         self._build()
@@ -44,16 +42,6 @@ class DisplayControls:
         self.pause_button.on_click = self._toggle_pause
         self.layout.add(self.pause_button)
 
-        # Edit entity button
-        self.edit_button = arcade.gui.UIFlatButton(
-            text="Edit Entity",
-            width=self.button_width,
-            height=35,
-        )
-        self.edit_button.on_click = self._on_edit_entity_button
-        self.edit_button.disabled = True
-        self.layout.add(self.edit_button)
-
     def _toggle_grid(self, event):
         """Toggle grid display."""
         if self.on_grid_toggle:
@@ -66,11 +54,6 @@ class DisplayControls:
         if self.on_pause_toggle:
             self.on_pause_toggle()
 
-    def _on_edit_entity_button(self, event):
-        """Handle edit entity button click."""
-        if self.on_edit_entity:
-            self.on_edit_entity()
-
     def set_grid_enabled(self, enabled: bool):
         """Set grid display state."""
         self.grid_button.text = f"Grid: {'ON' if enabled else 'OFF'}"
@@ -79,20 +62,6 @@ class DisplayControls:
         """Set pause state programmatically."""
         self.is_paused = enabled
         self.pause_button.text = f"Pause: {'ON' if enabled else 'OFF'}"
-
-    def set_entity_selected(self, selected: bool, entity_name: str = "Entity"):
-        """Set entity selection state and update edit button."""
-        self.entity_selected = selected
-        self.edit_button.disabled = not (selected and self.is_paused)
-        if selected:
-            self.edit_button.text = f"Edit {entity_name}"
-        else:
-            self.edit_button.text = "Edit Entity"
-            self.edit_button.disabled = True
-
-    def update_edit_button_availability(self):
-        """Update edit button availability based on pause and selection state."""
-        self.edit_button.disabled = not (self.entity_selected and self.is_paused)
 
     def get_layout(self) -> arcade.gui.UIBoxLayout:
         """Get the widget layout."""

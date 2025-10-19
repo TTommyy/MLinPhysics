@@ -31,21 +31,6 @@ class EntityEditorPanel:
         self.editor_current_colors.clear()
         self.editor_vector_fields.clear()
 
-        title = arcade.gui.UILabel(
-            text="Entity Editor",
-            font_size=12,
-            bold=True,
-            text_color=arcade.color.BLACK,
-        )
-        self.layout.add(title)
-
-        msg = arcade.gui.UILabel(
-            text="Press 'A' to add entity",
-            font_size=10,
-            text_color=arcade.color.DARK_GRAY,
-        )
-        self.layout.add(msg)
-
     def _build_add_mode(self):
         """Build add mode UI with entity parameters."""
         self.layout.clear()

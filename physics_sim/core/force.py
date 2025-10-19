@@ -1,9 +1,7 @@
-from abc import ABC, abstractmethod
+from abc import ABC
 from typing import Any
 
 import numpy as np
-
-from physics_sim.core.entity import Entity
 
 
 class Force(ABC):
@@ -19,31 +17,6 @@ class Force(ABC):
             name: Human-readable name for this force (e.g., "Gravity", "Drag")
         """
         self.name = name
-
-    @abstractmethod
-    def should_apply_to(self, entity: Entity) -> bool:
-        """Determine if this force should be applied to the given entity.
-
-        Args:
-            entity: The entity to check
-
-        Returns:
-            True if the force should be applied, False otherwise
-        """
-        pass
-
-    @abstractmethod
-    def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
-        """Calculate and return the force vector to apply to the entity.
-
-        Args:
-            entity: The entity to apply force to
-            dt: Time step (may be needed for some force calculations)
-
-        Returns:
-            Force vector (in Newtons) as np.ndarray shape (2,)
-        """
-        pass
 
     def apply_to_batch(
         self,

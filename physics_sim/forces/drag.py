@@ -31,10 +31,6 @@ class DragForce(Force):
         self.fluid_density = fluid_density
         self.linear = linear
 
-    def should_apply_to(self, entity: Entity) -> bool:
-        """Drag applies to all physical entities (they all have drag_coefficient property)."""
-        return isinstance(entity, PhysicalEntity) and entity.drag_enabled
-
     def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
         """Calculate drag force based on velocity."""
         if not isinstance(entity, PhysicalEntity):

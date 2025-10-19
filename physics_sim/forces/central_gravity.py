@@ -17,7 +17,11 @@ class CentralGravityForce(Force):
         self.center_mass = float(center_mass)
         self.G = float(gravitational_constant)
 
-    def apply_to_batch(
+    @classmethod
+    def get_name(cls) -> str:
+        return "CentralGravity"
+
+    def apply_force(
         self,
         positions: np.ndarray,
         velocities: np.ndarray,

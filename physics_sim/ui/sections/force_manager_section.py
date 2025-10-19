@@ -116,7 +116,7 @@ class ForceManagerSection(BaseSection):
 
         y_offset = self.region.top - 90
         for force_class in page_forces:
-            force_name = force_class.__name__
+            force_name = force_class.get_name()
             is_active = force_name in self._active_forces
 
             # Checkbox

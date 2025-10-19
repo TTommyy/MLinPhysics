@@ -208,15 +208,3 @@ class EntityApiMixin:
         else:
             return False
         return True
-
-    def _get_position(self, idx: int):
-        return self._positions[idx]
-
-    def _get_velocity(self, idx: int):
-        return self._velocities[idx]
-
-    def _get_mass(self, idx: int) -> float:
-        return float(self._masses[idx])
-
-    def _set_mass(self, idx: int, value: float) -> None:
-        self._masses[idx] = value

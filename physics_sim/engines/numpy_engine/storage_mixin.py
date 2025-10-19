@@ -1,4 +1,5 @@
 import numpy as np
+
 from .constants import INITIAL_CAPACITY
 from .types import EntityType
 
@@ -8,6 +9,9 @@ class StorageMixin:
         self._n_entities: int = 0
         self._capacity: int = INITIAL_CAPACITY
 
+        self._prev_positions: np.ndarray = np.zeros(
+            (self._capacity, 2), dtype=np.float64
+        )
         self._positions: np.ndarray = np.zeros((self._capacity, 2), dtype=np.float64)
         self._entity_types: np.ndarray = np.zeros(self._capacity, dtype=np.int32)
         self._is_static: np.ndarray = np.zeros(self._capacity, dtype=bool)
@@ -51,6 +55,7 @@ class StorageMixin:
     def _grow_arrays(self, min_additional: int = 1) -> None:
         new_capacity = max(self._capacity * 2, self._capacity + min_additional)
 
+        self._prev_positions = np.resize(self._prev_positions, (new_capacity, 2))
         self._positions = np.resize(self._positions, (new_capacity, 2))
         self._entity_types = np.resize(self._entity_types, new_capacity)
         self._is_static = np.resize(self._is_static, new_capacity)

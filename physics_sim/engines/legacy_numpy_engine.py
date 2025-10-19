@@ -287,7 +287,7 @@ class NumpyPhysicsEngine(PhysicsEngine):
         # Apply all forces (vectorized batch operations)
         for force in self.forces:
             # Get force vectors for all dynamic entities
-            force_vectors = force.apply_to_batch(
+            force_vectors = force.apply_force(
                 positions=self._positions[:n][dyn],
                 velocities=self._velocities[:n][dyn],
                 masses=self._masses[:n][dyn],

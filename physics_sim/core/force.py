@@ -1,4 +1,4 @@
-from abc import ABC
+from abc import ABC, abstractmethod
 from typing import Any
 
 import numpy as np
@@ -18,7 +18,7 @@ class Force(ABC):
         """
         self.name = name
 
-    def apply_to_batch(
+    def apply_force(
         self,
         positions: np.ndarray,
         velocities: np.ndarray,
@@ -63,6 +63,38 @@ class Force(ABC):
             Total potential energy contribution in Joules
         """
         return 0.0
+
+    def apply_constraints(
+        self,
+        positions: np.ndarray,
+        velocities: np.ndarray,
+        masses: np.ndarray,
+        entity_types: np.ndarray,
+        dt: float,
+        **kwargs,
+    ) -> np.ndarray:
+        """Default: no-op. PBD constraints project positions.
+
+        Args:
+            positions: Position vectors, shape (n, 2)
+            prev_positions: Previous position vectors, shape (n, 2)
+            velocities: Velocity vectors, shape (n, 2)
+            masses: Mass values, shape (n,)
+            entity_types: Entity type IDs, shape (n,)
+            dt: Time step
+            **kwargs: Additional entity-specific properties
+
+        Returns:
+            positions after constraint
+        """
+        return None
+
+
+    @classmethod
+    @abstractmethod
+    def get_name(cls) -> str:
+        """Get force name"""
+        pass
 
     @classmethod
     def is_unique(cls) -> bool:

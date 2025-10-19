@@ -6,9 +6,9 @@ class ForceMixin:
         for i in range(n):
             self._applied_forces[i].clear()
 
-    def _apply_forces_vectorized(self, dt: float, dyn: np.ndarray, n: int) -> None:
+    def _apply_forces(self, dt: float, dyn: np.ndarray, n: int) -> None:
         for force in self.forces:
-            force_vectors = force.apply_to_batch(
+            force_vectors = force.apply_force(
                 positions=self._positions[:n][dyn],
                 velocities=self._velocities[:n][dyn],
                 masses=self._masses[:n][dyn],

@@ -31,6 +31,10 @@ class DragForce(Force):
         self.fluid_density = fluid_density
         self.linear = linear
 
+    @classmethod
+    def get_name(cls) -> str:
+        return "Drag"
+
     def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
         """Calculate drag force based on velocity."""
         if not isinstance(entity, PhysicalEntity):
@@ -72,7 +76,7 @@ class DragForce(Force):
                 drag_direction = np.array([drag_direction.x, drag_direction.y])
             return drag_direction * (-drag_magnitude)
 
-    def apply_to_batch(
+    def apply_force(
         self,
         positions: np.ndarray,
         velocities: np.ndarray,

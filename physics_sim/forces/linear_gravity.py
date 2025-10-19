@@ -22,7 +22,11 @@ class LinearGravityForce(Force):
             acceleration if acceleration is not None else np.array([0.0, -9.81])
         )
 
-    def apply_to_batch(
+    @classmethod
+    def get_name(cls) -> str:
+        return "LinearGravityForce"
+
+    def apply_force(
         self,
         positions: np.ndarray,
         velocities: np.ndarray,

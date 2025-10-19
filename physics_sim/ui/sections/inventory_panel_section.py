@@ -223,7 +223,7 @@ class InventoryPanelSection(BaseSection):
         texts["id_label"].x = x + padding
         texts["id_label"].y = content_y
         texts["id_label"].draw()
-        texts["id_value"].text = f"{data['id'][:10]}..."
+        texts["id_value"].text = f"{data['id'][:10]}"
         texts["id_value"].x = x + 60
         texts["id_value"].y = content_y
         texts["id_value"].draw()
@@ -249,6 +249,17 @@ class InventoryPanelSection(BaseSection):
         texts["pos_value"].x = x + 60
         texts["pos_value"].y = content_y
         texts["pos_value"].draw()
+        content_y -= line_height
+
+        texts["acc_label"].x = x + padding
+        texts["acc_label"].y = content_y
+        texts["acc_label"].draw()
+        texts[
+            "acc_value"
+        ].text = f"({data['acceleration'][0]:.1f}, {data['acceleration'][1]:.1f})"
+        texts["acc_value"].x = x + 60
+        texts["acc_value"].y = content_y
+        texts["acc_value"].draw()
         content_y -= line_height
 
         # Velocity & Speed
@@ -299,6 +310,8 @@ class InventoryPanelSection(BaseSection):
                 "mass_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
                 "pos_label": arcade.Text("Pos:", 5, 0, arcade.color.DARK_CYAN, 9),
                 "pos_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
+                "acc_label": arcade.Text("Acc:", 5, 0, arcade.color.DARK_CYAN, 9),
+                "acc_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
                 "vel_label": arcade.Text("Vel:", 5, 0, arcade.color.DARK_CYAN, 9),
                 "vel_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
                 "forces_header": arcade.Text(

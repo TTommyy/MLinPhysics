@@ -26,7 +26,7 @@ class SimulationConfig:
 
     # Debug settings
     show_debug_info: bool = True
-    energy_calc_interval: float = 0.05
+    energy_calc_interval: float = 0.2
     inventory_update_interval: float = 2.0
 
     def create_layout_manager(self):
@@ -56,7 +56,7 @@ class SimulationConfig:
         # Use default layout percentages
         control_panel_width_pct = 0.15
         inventory_panel_width_pct = 0.15
-        viewport_height_pct = 0.40
+        viewport_height_pct = 0.50
 
         # Calculate actual viewport dimensions
         control_width = int(width * control_panel_width_pct)

@@ -1,11 +1,13 @@
 __all__: list[str] = [
+    "CentralGravityForce",
     "LinearGravityForce",
     "DragForce",
 ]
 
+from .central_gravity import CentralGravityForce
 from .drag import DragForce
-from .gravity import LinearGravityForce
+from .linear_gravity import LinearGravityForce
 
 
 def get_supported_forces() -> list[type]:
-    return [DragForce, LinearGravityForce]
+    return [CentralGravityForce, LinearGravityForce, DragForce]

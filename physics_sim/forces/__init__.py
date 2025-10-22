@@ -22,10 +22,10 @@ from .wire_constraint_pbd import WireConstraintPBDForce
 def get_supported_forces() -> list[type]:
     return [
         CentralGravityForce,
-        WireConstraintPBDForce,
         LinearGravityForce,
         DragForce,
         VortexForce,
+        WireConstraintPBDForce,
         SpringTetherPBDFore,
         ExplosionImpulseForce,
         PairwiseDistancePBDFore,

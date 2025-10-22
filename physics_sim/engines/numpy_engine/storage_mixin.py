@@ -43,14 +43,6 @@ class StorageMixin:
                 "color": [None] * self._capacity,
                 "friction_coefficient": np.zeros(self._capacity, dtype=np.float64),
             },
-            EntityType.ANCHOR_POINT: {
-                "radius": np.zeros(self._capacity, dtype=np.float64),
-                "color": [None] * self._capacity,
-            },
-            EntityType.EXPLOSION_EMITTER: {
-                "radius": np.zeros(self._capacity, dtype=np.float64),
-                "color": [None] * self._capacity,
-            },
         }
 
         self._entity_ids: list[str] = [None] * self._capacity

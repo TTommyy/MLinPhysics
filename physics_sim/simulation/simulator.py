@@ -32,7 +32,7 @@ class Simulator(arcade.Window):
         self,
         config: SimulationConfig,
         engine: PhysicsEngine,
-        fps: float = 65.0,
+        fps: float = 60.0,
     ):
         """
         Args:

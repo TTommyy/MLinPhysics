@@ -1,9 +1,109 @@
 import numpy as np
-from .types import EntityType
+
 from .constants import EPS
+from .types import EntityType
 
 
 class CollisionMixin:
+    def _resolve_with_pairs(self, pairs_by_type: dict[str, np.ndarray]) -> None:
+        bb = pairs_by_type.get("ball_ball")
+        if isinstance(bb, np.ndarray) and bb.size:
+            self._resolve_ball_ball_pairs(bb)
+
+        br = pairs_by_type.get("ball_rect")
+        if isinstance(br, np.ndarray) and br.size:
+            self._resolve_ball_rectangle_pairs(br)
+
+        bc = pairs_by_type.get("ball_circle")
+        if isinstance(bc, np.ndarray) and bc.size:
+            self._resolve_ball_circle_pairs(bc)
+
+    def _resolve_ball_ball_pairs(self, pairs: np.ndarray) -> None:
+        i_idx = pairs[:, 0]
+        j_idx = pairs[:, 1]
+        pos_i = self._positions[i_idx]
+        pos_j = self._positions[j_idx]
+        vel_i = self._velocities[i_idx]
+        vel_j = self._velocities[j_idx]
+        m_i = self._masses[i_idx]
+        m_j = self._masses[j_idx]
+        r_i = self._type_properties[EntityType.BALL]["radius"][i_idx]
+        r_j = self._type_properties[EntityType.BALL]["radius"][j_idx]
+        e_i = self._restitutions[i_idx]
+        e_j = self._restitutions[j_idx]
+
+        delta = pos_j - pos_i
+        dist = np.linalg.norm(delta, axis=1)
+        min_dist = r_i + r_j
+        collide = (dist < min_dist) & (dist > EPS)
+        if not np.any(collide):
+            return
+
+        idx = np.where(collide)[0]
+        nrm = delta[idx] / dist[idx][:, None]
+        rel_v = vel_i[idx] - vel_j[idx]
+        v_n = np.sum(rel_v * nrm, axis=1)
+        # Mirror existing logic: skip if v_n <= 0
+        mask = v_n > 0.0
+        if not np.any(mask):
+            # still resolve penetration to prevent sinking
+            pen = min_dist[idx] - dist[idx]
+            total_m = m_i[idx] + m_j[idx]
+            corr = nrm * (pen[:, None] * (m_j[idx] / total_m)[:, None])
+            np.add.at(self._positions, i_idx[idx], -corr)
+            corr_j = nrm * (pen[:, None] * (m_i[idx] / total_m)[:, None])
+            np.add.at(self._positions, j_idx[idx], corr_j)
+            return
+
+        sel = idx[mask]
+        n = nrm[mask]
+        rel = vel_i[sel] - vel_j[sel]
+        vdot = np.sum(rel * n, axis=1)
+        e = (e_i[sel] + e_j[sel]) * 0.5
+        inv_mass = (1.0 / m_i[sel]) + (1.0 / m_j[sel])
+        j_scalar = (-(1.0 + e) * vdot) / inv_mass
+        imp = j_scalar[:, None] * n
+
+        # Apply impulses
+        np.add.at(self._velocities, i_idx[sel], imp / m_i[sel][:, None])
+        np.add.at(self._velocities, j_idx[sel], -imp / m_j[sel][:, None])
+
+        # Positional correction
+        dist_sel = dist[sel]
+        min_dist_sel = min_dist[sel]
+        overlap = np.maximum(min_dist_sel - dist_sel, 0.0)
+        if np.any(overlap > 0):
+            tm = m_i[sel] + m_j[sel]
+            corr_i = n * ((overlap * (m_j[sel] / tm))[:, None])
+            corr_j = n * ((overlap * (m_i[sel] / tm))[:, None])
+            np.add.at(self._positions, i_idx[sel], -corr_i)
+            np.add.at(self._positions, j_idx[sel], corr_j)
+
+        # Friction
+        if getattr(self, "friction_enabled", False):
+            rel = self._velocities[i_idx[sel]] - self._velocities[j_idx[sel]]
+            v_n_comp = np.sum(rel * n, axis=1)[:, None] * n
+            v_tan = rel - v_n_comp
+            tan_norm = np.linalg.norm(v_tan, axis=1)
+            t_mask = tan_norm > EPS
+            if np.any(t_mask):
+                t = v_tan[t_mask] / tan_norm[t_mask][:, None]
+                mu = (
+                    self._friction_coeffs[i_idx[sel][t_mask]]
+                    + self._friction_coeffs[j_idx[sel][t_mask]]
+                ) * 0.5
+                f_imp = (mu * np.abs(j_scalar[t_mask]))[:, None] * t
+                np.add.at(
+                    self._velocities,
+                    i_idx[sel][t_mask],
+                    -f_imp / m_i[sel][t_mask][:, None],
+                )
+                np.add.at(
+                    self._velocities,
+                    j_idx[sel][t_mask],
+                    f_imp / m_j[sel][t_mask][:, None],
+                )
+
     def _handle_ball_ball_collisions_vectorized(self) -> None:
         n = self._n_entities
         ball_mask = self._dynamic_mask[:n] & (self._entity_types[:n] == EntityType.BALL)
@@ -126,6 +226,56 @@ class CollisionMixin:
         self._positions[ball_indices] = ball_positions
         self._velocities[ball_indices] = ball_velocities
 
+    def _resolve_ball_circle_pairs(self, pairs: np.ndarray) -> None:
+        bi = pairs[:, 0]
+        ci = pairs[:, 1]
+        bp = self._positions[bi]
+        bv = self._velocities[bi]
+        br = self._type_properties[EntityType.BALL]["radius"][bi]
+        be = self._restitutions[bi]
+
+        cp = self._positions[ci]
+        cr = self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][ci]
+
+        delta = bp - cp
+        dist = np.linalg.norm(delta, axis=1)
+        min_dist = br + cr
+        collide = (dist < min_dist) & (dist > EPS)
+        if not np.any(collide):
+            return
+        idx = np.where(collide)[0]
+        n = delta[idx] / dist[idx][:, None]
+        v_n = np.sum(bv[idx] * n, axis=1)
+        move_mask = v_n < 0.0
+        if not np.any(move_mask):
+            return
+        sel = idx[move_mask]
+        n_sel = n[move_mask]
+        # Reflect velocity along normal with restitution
+        jn = (1.0 + be[sel]) * v_n[move_mask]
+        self._velocities[bi[sel]] -= jn[:, None] * n_sel
+
+        # Positional correction
+        overlap = min_dist[sel] - dist[sel]
+        if np.any(overlap > 0):
+            self._positions[bi[sel]] += n_sel * overlap[:, None]
+
+        if getattr(self, "friction_enabled", False):
+            tangential = self._velocities[bi[sel]] - (
+                np.sum(self._velocities[bi[sel]] * n_sel, axis=1)[:, None] * n_sel
+            )
+            tan_speed = np.linalg.norm(tangential, axis=1)
+            tmask = tan_speed > EPS
+            if np.any(tmask):
+                t = tangential[tmask] / tan_speed[tmask][:, None]
+                mu = (
+                    self._friction_coeffs[bi[sel][tmask]]
+                    + self._friction_coeffs[ci[sel][tmask]]
+                ) * 0.5
+                normal_imp = (1.0 + be[sel][tmask]) * np.abs(v_n[move_mask][tmask])
+                f_imp = (mu * normal_imp)[:, None] * t
+                self._velocities[bi[sel][tmask]] -= f_imp
+
     def _handle_ball_rectangle_obstacle_collisions_vectorized(self) -> None:
         n = self._n_entities
         ball_mask = self._dynamic_mask[:n] & (self._entity_types[:n] == EntityType.BALL)
@@ -227,3 +377,84 @@ class CollisionMixin:
 
         self._positions[ball_indices] = ball_positions
         self._velocities[ball_indices] = ball_velocities
+
+    def _resolve_ball_rectangle_pairs(self, pairs: np.ndarray) -> None:
+        bi = pairs[:, 0]
+        ri = pairs[:, 1]
+        bp = self._positions[bi]
+        bv = self._velocities[bi]
+        br = self._type_properties[EntityType.BALL]["radius"][bi]
+        be = self._restitutions[bi]
+
+        rp = self._positions[ri]
+        rw = self._type_properties[EntityType.RECTANGLE_OBSTACLE]["width"][ri]
+        rh = self._type_properties[EntityType.RECTANGLE_OBSTACLE]["height"][ri]
+
+        rect_left = rp[:, 0] - 0.5 * rw
+        rect_right = rp[:, 0] + 0.5 * rw
+        rect_bottom = rp[:, 1] - 0.5 * rh
+        rect_top = rp[:, 1] + 0.5 * rh
+
+        closest_x = np.clip(bp[:, 0], rect_left, rect_right)
+        closest_y = np.clip(bp[:, 1], rect_bottom, rect_top)
+        dx = bp[:, 0] - closest_x
+        dy = bp[:, 1] - closest_y
+        dist = np.sqrt(dx * dx + dy * dy)
+        collide = dist < br
+        if not np.any(collide):
+            return
+
+        idx = np.where(collide)[0]
+        # normals for non-degenerate
+        nz = dist[idx] > EPS
+        normals = np.zeros((len(idx), 2), dtype=np.float64)
+        normals[nz, 0] = dx[idx][nz] / dist[idx][nz]
+        normals[nz, 1] = dy[idx][nz] / dist[idx][nz]
+
+        # degenerate: choose nearest face normal
+        dz = ~nz
+        if np.any(dz):
+            ii = idx[dz]
+            dl = np.abs(bp[ii, 0] - rect_left[ii])
+            dr = np.abs(bp[ii, 0] - rect_right[ii])
+            db = np.abs(bp[ii, 1] - rect_bottom[ii])
+            dt = np.abs(bp[ii, 1] - rect_top[ii])
+            m = np.stack([dl, dr, db, dt], axis=1)
+            arg = np.argmin(m, axis=1)
+            # left,right,bottom,top
+            normals_d = np.zeros((len(ii), 2), dtype=np.float64)
+            normals_d[arg == 0] = np.array([-1.0, 0.0])
+            normals_d[arg == 1] = np.array([1.0, 0.0])
+            normals_d[arg == 2] = np.array([0.0, -1.0])
+            normals_d[arg == 3] = np.array([0.0, 1.0])
+            normals[dz] = normals_d
+
+        v_n = np.sum(bv[idx] * normals, axis=1)
+        move_mask = v_n < 0.0
+        if not np.any(move_mask):
+            return
+        sel = idx[move_mask]
+        n = normals[move_mask]
+        self._velocities[bi[sel]] -= ((1.0 + be[sel]) * v_n[move_mask])[:, None] * n
+
+        overlap = br[sel] - dist[sel]
+        if np.any(overlap > 0):
+            self._positions[bi[sel]] += n * overlap[:, None]
+
+        if getattr(self, "friction_enabled", False):
+            tangential = self._velocities[bi[sel]] - (
+                np.sum(self._velocities[bi[sel]] * n, axis=1)[:, None] * n
+            )
+            tan_speed = np.linalg.norm(tangential, axis=1)
+            tmask = tan_speed > EPS
+            if np.any(tmask):
+                t = tangential[tmask] / tan_speed[tmask][:, None]
+                mu = (
+                    self._friction_coeffs[bi[sel][tmask]]
+                    + self._type_properties[EntityType.RECTANGLE_OBSTACLE][
+                        "friction_coefficient"
+                    ][ri[sel][tmask]]
+                ) * 0.5
+                normal_imp = (1.0 + be[sel][tmask]) * np.abs(v_n[move_mask][tmask])
+                f_imp = (mu * normal_imp)[:, None] * t
+                self._velocities[bi[sel][tmask]] -= f_imp

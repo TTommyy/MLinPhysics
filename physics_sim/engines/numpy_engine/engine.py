@@ -5,6 +5,7 @@ import numpy as np
 from physics_sim.core import PhysicsEngine
 
 from .boundary_mixin import BoundaryMixin
+from .broadphase_mixin import BroadphaseMixin
 from .collision_mixin import CollisionMixin
 from .data_export_mixin import DataExportMixin
 from .energy_mixin import EnergyMixin
@@ -21,6 +22,7 @@ class NumpyPhysicsEngine(
     IntegrationMixin,
     PBDMixIn,
     BoundaryMixin,
+    BroadphaseMixin,
     CollisionMixin,
     EntityApiMixin,
     DataExportMixin,
@@ -51,8 +53,8 @@ class NumpyPhysicsEngine(
         self._apply_constraints(dt, dyn, n)
 
         self._handle_boundary_collisions_vectorized()
-        self._handle_ball_ball_collisions_vectorized()
-        self._handle_ball_obstacle_collisions_vectorized()
+        pairs = self._build_bvh_and_pairs()
+        self._resolve_with_pairs(pairs)
 
     def get_forces_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
         if sample_points is None or len(sample_points) == 0:

@@ -93,7 +93,7 @@ class BroadphaseMixin:
         bounds_max[: min(2, d)] = np.asarray(self.bounds, dtype=np.float64)[: min(2, d)]
 
         bvh, _ = build_lbvh(aabb_min, aabb_max, bounds_min, bounds_max)
-        all_pairs = enumerate_overlapping_pairs(bvh)  # engine indices already
+        all_pairs = enumerate_overlapping_pairs(bvh)  # indices in collider space
         if all_pairs.shape[0] == 0:
             return {
                 "ball_ball": np.empty((0, 2), dtype=np.int32),
@@ -101,11 +101,12 @@ class BroadphaseMixin:
                 "ball_circle": np.empty((0, 2), dtype=np.int32),
             }
 
+        # Map pairs from collider space back to engine space
+        a = collider_indices[all_pairs[:, 0]]
+        b = collider_indices[all_pairs[:, 1]]
+
         et = self._entity_types
         dyn = self._dynamic_mask
-
-        a = all_pairs[:, 0]
-        b = all_pairs[:, 1]
 
         type_a = et[a]
         type_b = et[b]

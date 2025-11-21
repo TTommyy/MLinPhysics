@@ -53,6 +53,9 @@ class NumpyPhysicsEngine(
         self._apply_constraints(dt, dyn, n)
 
         self._handle_boundary_collisions_vectorized()
+        # self._handle_ball_ball_collisions_vectorized()
+        # self._handle_ball_obstacle_collisions_vectorized()
+
         pairs = self._build_bvh_and_pairs()
         self._resolve_with_pairs(pairs)
 

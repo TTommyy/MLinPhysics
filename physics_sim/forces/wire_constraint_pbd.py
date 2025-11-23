@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Any, Sequence
 
 import numpy as np
+from numba import njit
 
 from physics_sim.core import Force
 
@@ -32,13 +35,11 @@ class WireConstraintPBDForce(Force):
         **kwargs,
     ) -> tuple[np.ndarray, np.ndarray]:
         """Project positions onto circle of fixed radius."""
-        deltas = positions - self.center
-        dist = np.linalg.norm(deltas, axis=1, keepdims=True)
-        safe = np.maximum(dist, 1e-10)
-        dirs = deltas / safe
-        corr = self.radius - dist
-        positions = positions + (dirs * corr)
-        return positions
+        return _project_wire_positions(
+            positions=positions,
+            center=self.center,
+            radius=self.radius,
+        )
 
     @classmethod
     def is_unique(cls) -> bool:
@@ -97,3 +98,28 @@ class WireConstraintPBDForce(Force):
             }
         ]
         return {"overlays": overlays}
+
+
+#### END PUBLIC API
+
+
+@njit
+def _project_wire_positions(
+    positions: np.ndarray,
+    center: np.ndarray,
+    radius: float,
+) -> np.ndarray:
+    n = positions.shape[0]
+    updated = positions.copy()
+    for i in range(n):
+        dx = positions[i, 0] - center[0]
+        dy = positions[i, 1] - center[1]
+        dist_sq = dx * dx + dy * dy
+        dist = np.sqrt(dist_sq)
+        safe = dist if dist >= 1e-10 else 1e-10
+        dir_x = dx / safe
+        dir_y = dy / safe
+        corr = radius - dist
+        updated[i, 0] += dir_x * corr
+        updated[i, 1] += dir_y * corr
+    return updated

@@ -4,10 +4,11 @@ import logging
 from dataclasses import dataclass
 
 import numpy as np
+from numba import njit
 
 # Configure logging
 logging.basicConfig(
-    level=logging.INFO, format="%(asctime)s - %(levelname)s - %(message)s"
+    level=logging.WARNING, format="%(asctime)s - %(levelname)s - %(message)s"
 )
 logger = logging.getLogger(__name__)
 
@@ -23,14 +24,33 @@ class LBVH:
     root: int
 
 
+@njit(cache=True)
 def _clz32(x: int) -> int:
+    """Count leading zeros in a 32-bit integer (Numba-compatible)."""
     if x <= 0:
-        # x == 0 -> 32 leading zeros for 32-bit
         return 32
-    result = 32 - int(x).bit_length()
-    return result
+
+    # Manual bit counting for Numba compatibility
+    n = 0
+    if x <= 0x0000FFFF:
+        n += 16
+        x <<= 16
+    if x <= 0x00FFFFFF:
+        n += 8
+        x <<= 8
+    if x <= 0x0FFFFFFF:
+        n += 4
+        x <<= 4
+    if x <= 0x3FFFFFFF:
+        n += 2
+        x <<= 2
+    if x <= 0x7FFFFFFF:
+        n += 1
+
+    return n
 
 
+@njit(cache=True)
 def _lcp(i: int, j: int, morton: np.ndarray, n: int) -> int:
     if j < 0 or j >= n:
         return -1
@@ -44,6 +64,7 @@ def _lcp(i: int, j: int, morton: np.ndarray, n: int) -> int:
     return result
 
 
+@njit(cache=True, fastmath=True)
 def _expand_bits_2d(v: np.ndarray) -> np.ndarray:
     # Interleave 16-bit to 32-bit (up to 10 bits used)
     x = v.astype(np.uint32)
@@ -54,6 +75,7 @@ def _expand_bits_2d(v: np.ndarray) -> np.ndarray:
     return x
 
 
+@njit(cache=True, fastmath=True)
 def _morton2d(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     xx = _expand_bits_2d(x)
     yy = _expand_bits_2d(y) << np.uint32(1)
@@ -61,6 +83,7 @@ def _morton2d(x: np.ndarray, y: np.ndarray) -> np.ndarray:
     return result
 
 
+@njit(cache=True, fastmath=True)
 def _expand_bits_3d(v: np.ndarray) -> np.ndarray:
     # Interleave 10-bit into 30-bit
     x = v.astype(np.uint32)
@@ -71,10 +94,8 @@ def _expand_bits_3d(v: np.ndarray) -> np.ndarray:
     return x
 
 
+@njit(cache=True, fastmath=True)
 def _morton3d(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    logger.debug(
-        f"_morton3d called with x shape={x.shape}, y shape={y.shape}, z shape={z.shape}"
-    )
     xx = _expand_bits_3d(x)
     yy = _expand_bits_3d(y) << np.uint32(1)
     zz = _expand_bits_3d(z) << np.uint32(2)
@@ -82,6 +103,7 @@ def _morton3d(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
     return result
 
 
+@njit(cache=True, fastmath=True)
 def _quantize01(vals: np.ndarray) -> np.ndarray:
     # Map [0,1] -> [0, 1023]
     clipped = np.clip(vals, 0.0, 1.0)
@@ -91,10 +113,10 @@ def _quantize01(vals: np.ndarray) -> np.ndarray:
     return result
 
 
-def _compute_morton_codes(
+@njit(cache=True, fastmath=True)
+def _compute_morton_codes_kernel(
     centers: np.ndarray, bounds_min: np.ndarray, bounds_max: np.ndarray
 ) -> np.ndarray:
-    logger.info(f"_compute_morton_codes called with centers shape={centers.shape}")
     n, d = centers.shape
 
     # Normalize to [0,1]
@@ -106,20 +128,24 @@ def _compute_morton_codes(
         qy = _quantize01(norm[:, 1])
         qz = _quantize01(norm[:, 2])
         result = _morton3d(qx, qy, qz).astype(np.uint32)
-        logger.info(
-            f"_compute_morton_codes returning 3D morton codes shape={result.shape}"
-        )
     else:
         qx = _quantize01(norm[:, 0])
         qy = _quantize01(norm[:, 1])
         result = _morton2d(qx, qy).astype(np.uint32)
-        logger.info(
-            f"_compute_morton_codes returning 2D morton codes shape={result.shape}"
-        )
 
     return result
 
 
+def _compute_morton_codes(
+    centers: np.ndarray, bounds_min: np.ndarray, bounds_max: np.ndarray
+) -> np.ndarray:
+    logger.info(f"_compute_morton_codes called with centers shape={centers.shape}")
+    result = _compute_morton_codes_kernel(centers, bounds_min, bounds_max)
+    logger.info(f"_compute_morton_codes returning morton codes shape={result.shape}")
+    return result
+
+
+@njit(cache=True)
 def _find_split(first: int, last: int, morton: np.ndarray) -> int:
     # Karras 2012: find index where highest differing bit between first and last splits the range
     first_code = int(morton[first])
@@ -206,7 +232,6 @@ def build_lbvh(
     node_max[0:n] = aabb_max_sorted
     leaf_index[0:n] = order.astype(np.int32)
 
-
     if n == 1:
         root = 0
         bvh = LBVH(left, right, parent, node_min, node_max, leaf_index, root)
@@ -263,14 +288,101 @@ def build_lbvh(
     return bvh, order.astype(np.int32)
 
 
+@njit(inline="always")
 def _aabb_intersect(
     min_a: np.ndarray, max_a: np.ndarray, min_b: np.ndarray, max_b: np.ndarray
 ) -> bool:
-    logger.debug(
-        f"_aabb_intersect called with shapes min_a={min_a.shape}, max_a={max_a.shape}"
-    )
     result = bool(np.all(min_a <= max_b) and np.all(max_a >= min_b))
     return result
+
+
+@njit(cache=True)
+def _enumerate_overlapping_pairs_kernel(
+    left: np.ndarray,
+    right: np.ndarray,
+    leaf_index: np.ndarray,
+    node_min: np.ndarray,
+    node_max: np.ndarray,
+    volumes: np.ndarray,
+    n_leaves: int,
+) -> np.ndarray:
+    """Numba-optimized core traversal kernel for BVH overlap enumeration."""
+    # Pre-allocate stack and pairs arrays
+    # Worst case: O(n^2) pairs, but typically much smaller
+    max_stack_size = n_leaves * 4  # Conservative estimate
+    max_pairs = n_leaves * (n_leaves - 1) // 2  # Upper bound
+
+    stack = np.empty((max_stack_size, 2), dtype=np.int32)
+    pairs = np.empty((max_pairs, 2), dtype=np.int32)
+
+    stack_size = 0
+    pairs_size = 0
+
+    # Seed stack with children of all internal nodes
+    for i in range(n_leaves, 2 * n_leaves - 1):
+        left_child = left[i]
+        right_child = right[i]
+
+        if left_child != -1 and right_child != -1:
+            # Check if their bounding boxes overlap
+            if _aabb_intersect(
+                node_min[left_child],
+                node_max[left_child],
+                node_min[right_child],
+                node_max[right_child],
+            ):
+                stack[stack_size, 0] = left_child
+                stack[stack_size, 1] = right_child
+                stack_size += 1
+
+    leaf_cut = n_leaves
+
+    # Main traversal loop
+    while stack_size > 0:
+        stack_size -= 1
+        a = stack[stack_size, 0]
+        b = stack[stack_size, 1]
+
+        # Check AABB intersection
+        if not _aabb_intersect(node_min[a], node_max[a], node_min[b], node_max[b]):
+            continue
+
+        a_is_leaf = a < leaf_cut
+        b_is_leaf = b < leaf_cut
+
+        # Both are leaves - record the pair
+        if a_is_leaf and b_is_leaf:
+            ia = leaf_index[a]
+            ib = leaf_index[b]
+
+            if ia != ib:
+                if ia < ib:
+                    pairs[pairs_size, 0] = ia
+                    pairs[pairs_size, 1] = ib
+                else:
+                    pairs[pairs_size, 0] = ib
+                    pairs[pairs_size, 1] = ia
+                pairs_size += 1
+            continue
+
+        # Expand the larger-volume internal node
+        if (not a_is_leaf) and (b_is_leaf or volumes[a] >= volumes[b]):
+            stack[stack_size, 0] = left[a]
+            stack[stack_size, 1] = b
+            stack_size += 1
+            stack[stack_size, 0] = right[a]
+            stack[stack_size, 1] = b
+            stack_size += 1
+        else:
+            stack[stack_size, 0] = a
+            stack[stack_size, 1] = left[b]
+            stack_size += 1
+            stack[stack_size, 0] = a
+            stack[stack_size, 1] = right[b]
+            stack_size += 1
+
+    # Return only the filled portion of pairs array
+    return pairs[:pairs_size]
 
 
 def enumerate_overlapping_pairs(bvh: LBVH) -> np.ndarray:
@@ -286,67 +398,22 @@ def enumerate_overlapping_pairs(bvh: LBVH) -> np.ndarray:
     extents = np.maximum(bvh.node_max - bvh.node_min, 0.0)
     volumes = np.prod(extents, axis=1)
 
-    pairs: list[tuple[int, int]] = []
-    stack: list[tuple[int, int]] = []
+    # Call the optimized kernel
+    arr = _enumerate_overlapping_pairs_kernel(
+        bvh.left,
+        bvh.right,
+        bvh.leaf_index,
+        bvh.node_min,
+        bvh.node_max,
+        volumes,
+        n_leaves,
+    )
 
-    # FIX: Seed the stack with children of ALL internal nodes to cover all subtrees.
-    # Internal nodes are stored at indices [n_leaves, 2*n_leaves - 2]
-    for i in range(n_leaves, 2 * n_leaves - 1):
-        left_child = int(bvh.left[i])
-        right_child = int(bvh.right[i])
+    logger.info(f"Found {len(arr)} overlapping pairs")
 
-        # Only process valid internal nodes
-        if left_child != -1 and right_child != -1:
-            # Optimization: Only add to stack if their bounding boxes actually overlap
-            if _aabb_intersect(
-                bvh.node_min[left_child],
-                bvh.node_max[left_child],
-                bvh.node_min[right_child],
-                bvh.node_max[right_child],
-            ):
-                stack.append((left_child, right_child))
-
-    leaf_cut = n_leaves  # node id < leaf_cut -> leaf
-
-    logger.info(f"Starting overlap enumeration with {len(stack)} initial pairs")
-
-    while stack:
-        a, b = stack.pop()
-
-        if not _aabb_intersect(
-            bvh.node_min[a], bvh.node_max[a], bvh.node_min[b], bvh.node_max[b]
-        ):
-            continue
-
-        a_is_leaf = a < leaf_cut
-        b_is_leaf = b < leaf_cut
-
-
-        if a_is_leaf and b_is_leaf:
-            ia = int(bvh.leaf_index[a])
-            ib = int(bvh.leaf_index[b])
-
-            if ia != ib:
-                if ia < ib:
-                    pairs.append((ia, ib))
-                else:
-                    pairs.append((ib, ia))
-            continue
-
-        # Expand the larger-volume internal node
-        if (not a_is_leaf) and (b_is_leaf or volumes[a] >= volumes[b]):
-            stack.append((int(bvh.left[a]), int(b)))
-            stack.append((int(bvh.right[a]), int(b)))
-        else:
-            stack.append((int(a), int(bvh.left[b])))
-            stack.append((int(a), int(bvh.right[b])))
-
-    logger.info(f"Found {len(pairs)} overlapping pairs")
-
-    if not pairs:
+    if arr.shape[0] == 0:
         return np.empty((0, 2), dtype=np.int32)
 
-    arr = np.asarray(pairs, dtype=np.int32)
     # Deduplicate
     if arr.shape[0] > 1:
         view = arr.view([("a", arr.dtype), ("b", arr.dtype)])

@@ -15,7 +15,12 @@ class PhysicsEngine(ABC):
     the same interface.
     """
 
-    def __init__(self, bounds: tuple[float, float], friction_enabled: bool = True):
+    def __init__(
+        self,
+        bounds: tuple[float, float],
+        friction_enabled: bool = True,
+        bhv: bool = True,
+    ):
         """
         Args:
             gravity: Gravity acceleration as np.ndarray([x, y])

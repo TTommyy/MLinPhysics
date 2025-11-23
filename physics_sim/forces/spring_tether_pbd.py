@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from physics_sim.core import Force
 
@@ -34,8 +37,11 @@ class SpringTetherPBDFore(Force):
         dt: float,
         **kwargs,
     ) -> np.ndarray:
-        deltas = positions - self.center
-        return -self.k * deltas
+        return _compute_spring_tether_force(
+            positions=positions,
+            center=self.center,
+            stiffness=self.k,
+        )
 
     def apply_constraints(
         self,
@@ -46,12 +52,11 @@ class SpringTetherPBDFore(Force):
         dt: float,
         **kwargs,
     ) -> np.ndarray:
-        deltas = positions - self.center
-        dist = np.linalg.norm(deltas, axis=1, keepdims=True)
-        safe = np.maximum(dist, 1e-10)
-        dirs = deltas / safe
-        corr = self.rest_length - dist
-        return positions + (dirs * corr)
+        return _apply_spring_tether_constraints(
+            positions=positions,
+            center=self.center,
+            rest_length=self.rest_length,
+        )
 
     def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
         overlays = [
@@ -122,3 +127,42 @@ class SpringTetherPBDFore(Force):
             return True
         except (ValueError, TypeError):
             return False
+
+
+#### END PUBLIC API
+
+
+@njit
+def _compute_spring_tether_force(
+    positions: np.ndarray,
+    center: np.ndarray,
+    stiffness: float,
+) -> np.ndarray:
+    n = positions.shape[0]
+    result = np.zeros_like(positions)
+    for i in range(n):
+        result[i, 0] = -stiffness * (positions[i, 0] - center[0])
+        result[i, 1] = -stiffness * (positions[i, 1] - center[1])
+    return result
+
+
+@njit
+def _apply_spring_tether_constraints(
+    positions: np.ndarray,
+    center: np.ndarray,
+    rest_length: float,
+) -> np.ndarray:
+    n = positions.shape[0]
+    updated = positions.copy()
+    for i in range(n):
+        dx = positions[i, 0] - center[0]
+        dy = positions[i, 1] - center[1]
+        dist_sq = dx * dx + dy * dy
+        dist = np.sqrt(dist_sq)
+        safe = dist if dist >= 1e-10 else 1e-10
+        dir_x = dx / safe
+        dir_y = dy / safe
+        corr = rest_length - dist
+        updated[i, 0] += dir_x * corr
+        updated[i, 1] += dir_y * corr
+    return updated

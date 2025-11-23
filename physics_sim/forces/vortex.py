@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from physics_sim.core import Force
 
@@ -34,15 +37,12 @@ class VortexForce(Force):
         dt: float,
         **kwargs,
     ) -> np.ndarray:
-        deltas = positions - self.center
-        r2 = np.sum(deltas**2, axis=1, keepdims=True)
-        r = np.sqrt(np.maximum(r2, 1e-10))
-        # Perpendicular (tangential) directions: rotate by +90deg
-        tangents = np.concatenate((-deltas[:, 1:2], deltas[:, 0:1]), axis=1)
-        tangents /= np.maximum(np.linalg.norm(tangents, axis=1, keepdims=True), 1e-10)
-
-        magnitude = self.strength / (r**self.falloff)
-        return tangents * magnitude
+        return _compute_vortex_force(
+            positions=positions,
+            center=self.center,
+            strength=self.strength,
+            falloff=self.falloff,
+        )
 
     def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
         overlays = [
@@ -113,3 +113,40 @@ class VortexForce(Force):
             return True
         except (ValueError, TypeError):
             return False
+
+#### END PUBLIC API
+
+
+@njit
+def _compute_vortex_force(
+    positions: np.ndarray,
+    center: np.ndarray,
+    strength: float,
+    falloff: float,
+) -> np.ndarray:
+    n = positions.shape[0]
+    result = np.zeros_like(positions)
+
+    for i in range(n):
+        dx = positions[i, 0] - center[0]
+        dy = positions[i, 1] - center[1]
+        r2 = dx * dx + dy * dy
+        safe_r2 = r2 if r2 >= 1e-10 else 1e-10
+        r = np.sqrt(safe_r2)
+
+        tang_x = -dy
+        tang_y = dx
+        tan_len = np.sqrt(tang_x * tang_x + tang_y * tang_y)
+        safe_tan = tan_len if tan_len >= 1e-10 else 1e-10
+        tang_x /= safe_tan
+        tang_y /= safe_tan
+
+        falloff_term = r**falloff if falloff != 0.0 else 1.0
+        if falloff_term <= 1e-12:
+            falloff_term = 1e-12
+
+        magnitude = strength / falloff_term
+        result[i, 0] = tang_x * magnitude
+        result[i, 1] = tang_y * magnitude
+
+    return result

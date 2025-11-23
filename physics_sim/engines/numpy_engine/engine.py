@@ -29,10 +29,13 @@ class NumpyPhysicsEngine(
     EnergyMixin,
     PhysicsEngine,
 ):
-    def __init__(self, bounds: tuple[float, float]):
+    def __init__(self, bounds: tuple[float, float], bvh: bool = True):
         PhysicsEngine.__init__(self, bounds)
         StorageMixin.__init__(self)
         self._paused: bool = False
+        self._handle_collisions = (
+            self._handle_collisions_bvh if bvh else self._handle_collisions_vectorized
+        )
 
     def step(self, dt: float) -> None:
         """Advance simulation using vectorized Euler integration with PBD constraints."""
@@ -53,11 +56,15 @@ class NumpyPhysicsEngine(
         self._apply_constraints(dt, dyn, n)
 
         self._handle_boundary_collisions_vectorized()
-        # self._handle_ball_ball_collisions_vectorized()
-        # self._handle_ball_obstacle_collisions_vectorized()
+        self._handle_collisions()
 
+    def _handle_collisions_bvh(self) -> None:
         pairs = self._build_bvh_and_pairs()
         self._resolve_with_pairs(pairs)
+
+    def _handle_collisions_vectorized(self) -> None:
+        self._handle_ball_ball_collisions_vectorized()
+        self._handle_ball_obstacle_collisions_vectorized()
 
     def get_forces_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
         if sample_points is None or len(sample_points) == 0:
@@ -100,7 +107,7 @@ class NumpyPhysicsEngine(
                 accumulated += vecs
 
             try:
-                rd = force.get_render_data(None)
+                rd = force.get_render_data(np.empty((0, 2)))
             except Exception:
                 rd = {}
             if isinstance(rd, dict):

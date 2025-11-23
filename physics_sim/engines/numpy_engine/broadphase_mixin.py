@@ -1,13 +1,27 @@
 from __future__ import annotations
 
+from typing import Protocol
+
 import numpy as np
+from numba import njit
 
 from .bvh import build_lbvh, enumerate_overlapping_pairs
 from .types import EntityType
 
 
-class BroadphaseMixin:
-    def _compute_aabbs_for_colliders(self) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
+class BroadphaseMixinAttrs(Protocol):
+    _n_entities: int
+    _positions: np.ndarray
+    _entity_types: np.ndarray
+    _dynamic_mask: np.ndarray
+    _type_properties: dict[EntityType, dict[str, np.ndarray]]
+    bounds: tuple[float, float]
+
+
+class BroadphaseMixin(BroadphaseMixinAttrs):
+    def _compute_aabbs_for_colliders(
+        self,
+    ) -> tuple[np.ndarray, np.ndarray, np.ndarray]:
         n = self._n_entities
         if n == 0:
             return (
@@ -37,16 +51,17 @@ class BroadphaseMixin:
         aabb_min = np.zeros((len(indices), d), dtype=np.float64)
         aabb_max = np.zeros((len(indices), d), dtype=np.float64)
 
-        # BALL and CIRCLE_OBSTACLE: radius across all dims
+        # BALL: use optimized kernel
         if is_ball.any():
             ball_local = np.where(is_ball[indices])[0]
             if len(ball_local) > 0:
                 ball_idx = indices[ball_local]
                 r = self._type_properties[EntityType.BALL]["radius"][ball_idx]
-                half = np.repeat(r[:, None], d, axis=1)
-                aabb_min[ball_local] = pos[ball_local] - half
-                aabb_max[ball_local] = pos[ball_local] + half
+                min_b, max_b = _compute_spherical_aabbs(pos[ball_local], r, d)
+                aabb_min[ball_local] = min_b
+                aabb_max[ball_local] = max_b
 
+        # CIRCLE_OBSTACLE: use optimized kernel
         if is_circle.any():
             circ_local = np.where(is_circle[indices])[0]
             if len(circ_local) > 0:
@@ -54,10 +69,11 @@ class BroadphaseMixin:
                 r = self._type_properties[EntityType.CIRCLE_OBSTACLE]["radius"][
                     circ_idx
                 ]
-                half = np.repeat(r[:, None], d, axis=1)
-                aabb_min[circ_local] = pos[circ_local] - half
-                aabb_max[circ_local] = pos[circ_local] + half
+                min_c, max_c = _compute_spherical_aabbs(pos[circ_local], r, d)
+                aabb_min[circ_local] = min_c
+                aabb_max[circ_local] = max_c
 
+        # RECTANGLE_OBSTACLE: use optimized kernel
         if is_rect.any():
             rect_local = np.where(is_rect[indices])[0]
             if len(rect_local) > 0:
@@ -68,17 +84,14 @@ class BroadphaseMixin:
                 h = self._type_properties[EntityType.RECTANGLE_OBSTACLE]["height"][
                     rect_idx
                 ]
-                half = np.zeros((len(rect_local), d), dtype=np.float64)
-                half[:, 0] = 0.5 * w
-                if d > 1:
-                    half[:, 1] = 0.5 * h
-                aabb_min[rect_local] = pos[rect_local] - half
-                aabb_max[rect_local] = pos[rect_local] + half
+                min_r, max_r = _compute_rectangle_aabbs(pos[rect_local], w, h, d)
+                aabb_min[rect_local] = min_r
+                aabb_max[rect_local] = max_r
 
         return aabb_min, aabb_max, indices
 
     def _build_bvh_and_pairs(self) -> dict[str, np.ndarray]:
-        aabb_min, aabb_max, collider_indices = self._compute_aabbs_for_colliders()
+        aabb_min, aabb_max, collider_indices = self._compute_aabbs_for_colliders()  # type: ignore
         if aabb_min.shape[0] == 0:
             return {
                 "ball_ball": np.empty((0, 2), dtype=np.int32),
@@ -174,3 +187,48 @@ class BroadphaseMixin:
             "ball_rect": ball_rect.astype(np.int32),
             "ball_circle": ball_circle.astype(np.int32),
         }
+
+
+@njit(cache=True, fastmath=True)
+def _compute_spherical_aabbs(
+    positions: np.ndarray, radii: np.ndarray, d: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute AABBs for spherical entities (balls, circles)."""
+    n = len(positions)
+    aabb_min = np.empty((n, d), dtype=np.float64)
+    aabb_max = np.empty((n, d), dtype=np.float64)
+
+    for i in range(n):
+        for dim in range(d):
+            aabb_min[i, dim] = positions[i, dim] - radii[i]
+            aabb_max[i, dim] = positions[i, dim] + radii[i]
+
+    return aabb_min, aabb_max
+
+
+@njit(cache=True, fastmath=True)
+def _compute_rectangle_aabbs(
+    positions: np.ndarray, widths: np.ndarray, heights: np.ndarray, d: int
+) -> tuple[np.ndarray, np.ndarray]:
+    """Compute AABBs for rectangular entities."""
+    n = len(positions)
+    aabb_min = np.empty((n, d), dtype=np.float64)
+    aabb_max = np.empty((n, d), dtype=np.float64)
+
+    for i in range(n):
+        half_w = 0.5 * widths[i]
+        half_h = 0.5 * heights[i]
+
+        aabb_min[i, 0] = positions[i, 0] - half_w
+        aabb_max[i, 0] = positions[i, 0] + half_w
+
+        if d > 1:
+            aabb_min[i, 1] = positions[i, 1] - half_h
+            aabb_max[i, 1] = positions[i, 1] + half_h
+
+        # Handle additional dimensions if present
+        for dim in range(2, d):
+            aabb_min[i, dim] = positions[i, dim]
+            aabb_max[i, dim] = positions[i, dim]
+
+    return aabb_min, aabb_max

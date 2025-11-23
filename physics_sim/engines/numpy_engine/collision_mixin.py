@@ -3,8 +3,23 @@ import numpy as np
 from .constants import EPS
 from .types import EntityType
 
+from typing import Protocol
 
-class CollisionMixin:
+class CollisionMixinAttr(Protocol):
+    friction_enabled: bool
+    _n_entities: int
+    _masses: np.ndarray
+    _positions: np.ndarray
+    _velocities: np.ndarray
+    _friction_coeffs: np.ndarray
+    _dynamic_mask: np.ndarray
+    _entity_types: np.ndarray
+    _is_static: np.ndarray
+    _type_properties: np.ndarray
+    _restitutions: np.ndarray
+
+
+class CollisionMixin(CollisionMixinAttr):
     def _resolve_with_pairs(self, pairs_by_type: dict[str, np.ndarray]) -> None:
         bb = pairs_by_type.get("ball_ball")
         if isinstance(bb, np.ndarray) and bb.size:

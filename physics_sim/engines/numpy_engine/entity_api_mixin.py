@@ -1,3 +1,7 @@
+from __future__ import annotations
+
+from typing import Protocol
+
 import numpy as np
 
 from physics_sim.core import Entity
@@ -10,7 +14,29 @@ from physics_sim.entities import (
 from .types import ENTITY_CLASS_TO_TYPE, EntityType
 
 
-class EntityApiMixin:
+class EntityApiAttrs(Protocol):
+    _n_entities: int
+    _capacity: int
+    _entity_ids: np.ndarray
+    _id_to_index: dict[str, int]
+    _entity_types: np.ndarray
+    _is_static: np.ndarray
+    _dynamic_mask: np.ndarray
+    _positions: np.ndarray
+    _velocities: np.ndarray
+    _accelerations: np.ndarray
+    _masses: np.ndarray
+    _restitutions: np.ndarray
+    _drag_coeffs: np.ndarray
+    _cross_sections: np.ndarray
+    _friction_coeffs: np.ndarray
+    _type_properties: dict[EntityType, dict[str, np.ndarray | list]]
+    _applied_forces: np.ndarray
+
+    def _grow_arrays(self) -> None: ...
+
+
+class EntityApiMixin(EntityApiAttrs):
     def add_entity(self, entity: Entity) -> None:
         if self._n_entities >= self._capacity:
             self._grow_arrays()

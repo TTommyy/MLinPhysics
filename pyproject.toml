@@ -2,12 +2,16 @@
 name = "physics-sim"
 version = "0.1.0"
 description = "Modular physics simulation framework with pluggable engines"
-requires-python = ">=3.13.7"
+requires-python = ">=3.13.7, <3.14"
 dependencies = [
     "arcade>=3.3.3",
     "base-conversion-kit>=1.0.7",
+    "ffmpeg>=1.4",
     "ipykernel>=7.0.1",
+    "ipynb>=0.5.1",
     "jupyter>=1.1.1",
+    "matplotlib>=3.10.7",
+    "numba>=0.62.1",
     "numpy>=1.24.0",
     "pandas>=2.3.3",
     "plotly>=6.3.1",
@@ -20,16 +24,8 @@ dev = [
     "ruff>=0.1.0",
 ]
 
-
-[tool.black]
-line-length = 88
-target-version = ['py310']
-
-[tool.ruff]
-line-length = 88
-target-version = "py310"
-select = ["E", "F", "I", "N", "W"]
-ignore = ["E501"]
+[tool.setuptools]
+packages = ["physics_sim"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]

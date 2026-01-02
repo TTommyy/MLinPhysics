@@ -11,8 +11,6 @@ __all__: list[str] = [
     "Force",
     "LinearGravityForce",
     "DragForce",
-    "InventoryPanel",
-    "ControlPanel",
     "SimulationConfig",
     "Simulator",
 ]
@@ -33,7 +31,6 @@ from physics_sim.simulation.config import SimulationConfig
 try:
     from physics_sim.rendering import ArcadeRenderer
     from physics_sim.simulation.simulator import Simulator
-    from physics_sim.ui import ControlPanel, InventoryPanel
 except ImportError:
     # Arcade not installed - these will be imported when needed
     pass

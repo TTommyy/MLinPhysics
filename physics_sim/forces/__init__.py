@@ -4,17 +4,17 @@ __all__: list[str] = [
     "DragForce",
     "WireConstraintPBDForce",
     "VortexForce",
-    "SpringTetherPBDFore",
+    "SpringTetherPBDForce",
     "ExplosionImpulseForce",
-    "PairwiseDistancePBDFore",
+    "PairwiseDistancePBDForce",
 ]
 
 from .central_gravity import CentralGravityForce
 from .drag import DragForce
 from .explosion_impulse import ExplosionImpulseForce
 from .linear_gravity import LinearGravityForce
-from .pairwise_distance_pbd import PairwiseDistancePBDFore
-from .spring_tether_pbd import SpringTetherPBDFore
+from .pairwise_distance_pbd import PairwiseDistancePBDForce
+from .spring_tether_pbd import SpringTetherPBDForce
 from .vortex import VortexForce
 from .wire_constraint_pbd import WireConstraintPBDForce
 
@@ -26,7 +26,7 @@ def get_supported_forces() -> list[type]:
         DragForce,
         VortexForce,
         WireConstraintPBDForce,
-        SpringTetherPBDFore,
+        SpringTetherPBDForce,
         ExplosionImpulseForce,
-        PairwiseDistancePBDFore,
+        PairwiseDistancePBDForce,
     ]

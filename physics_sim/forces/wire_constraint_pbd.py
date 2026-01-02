@@ -33,7 +33,7 @@ class WireConstraintPBDForce(Force):
         entity_types: np.ndarray,
         dt: float,
         **kwargs,
-    ) -> tuple[np.ndarray, np.ndarray]:
+    ) -> np.ndarray:
         """Project positions onto circle of fixed radius."""
         return _project_wire_positions(
             positions=positions,

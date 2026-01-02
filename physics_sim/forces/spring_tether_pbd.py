@@ -8,7 +8,7 @@ from numba import njit
 from physics_sim.core import Force
 
 
-class SpringTetherPBDFore(Force):
+class SpringTetherPBDForce(Force):
     def __init__(
         self,
         center: np.ndarray | list[float] = [10.0, 5.0],

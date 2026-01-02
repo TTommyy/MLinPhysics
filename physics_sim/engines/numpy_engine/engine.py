@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 import numpy as np
@@ -14,6 +15,8 @@ from .force_mixin import ForceMixin
 from .integration_mixin import IntegrationMixin
 from .pbd_mixin import PBDMixIn
 from .storage_mixin import StorageMixin
+
+logger = logging.getLogger(__name__)
 
 
 class NumpyPhysicsEngine(
@@ -101,14 +104,16 @@ class NumpyPhysicsEngine(
                     dt=dt,
                     engine_state=engine_state,
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning("Force %s apply_force failed: %s", force.name, e)
                 vecs = None
             if isinstance(vecs, np.ndarray) and vecs.shape == accumulated.shape:
                 accumulated += vecs
 
             try:
                 rd = force.get_render_data(np.empty((0, 2)))
-            except Exception:
+            except Exception as e:
+                logger.warning("Force %s get_render_data failed: %s", force.name, e)
                 rd = {}
             if isinstance(rd, dict):
                 ov = rd.get("overlays")

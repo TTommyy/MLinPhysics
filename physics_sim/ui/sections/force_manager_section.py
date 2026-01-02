@@ -18,7 +18,7 @@ EDIT_HORIZONTAL_OFFSET = 250
 class ForceManagerSection(BaseSection):
     """Top panel section for managing forces with pagination and parameter editing."""
 
-    def __init__(self, region: LayoutRegion, forces: list[type] = []):
+    def __init__(self, region: LayoutRegion, forces: list[type] | None = None):
         super().__init__(
             region,
             background_color=arcade.color.LIGHT_SKY_BLUE,
@@ -29,6 +29,8 @@ class ForceManagerSection(BaseSection):
         self.items_per_page = 1
         self.ui_manager = arcade.gui.UIManager()
 
+        if forces is None:
+            forces = []
         self._available_force_types: list[type] = forces
         self.total_pages = max(
             1, (len(forces) + self.items_per_page - 1) // self.items_per_page

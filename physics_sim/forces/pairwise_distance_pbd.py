@@ -8,7 +8,7 @@ from numba import njit
 from physics_sim.core import Force
 
 
-class PairwiseDistancePBDFore(Force):
+class PairwiseDistancePBDForce(Force):
     """PBD constraint to keep nearby dynamic entities at a target distance.
 
     Strategy: connect each entity to its nearest neighbor within max_distance.

@@ -1,12 +1,32 @@
+from __future__ import annotations
+
+from typing import Protocol
+
 import numpy as np
 
+from physics_sim.core import Force
 
-class ForceMixin:
+
+class ForceMixinAttrs(Protocol):
+    _applied_forces: list[list[tuple[str, np.ndarray]]]
+    forces: list[Force]
+    _positions: np.ndarray
+    _velocities: np.ndarray
+    _masses: np.ndarray
+    _drag_coeffs: np.ndarray
+    _cross_sections: np.ndarray
+    _entity_types: np.ndarray
+    _accelerations: np.ndarray
+
+
+class ForceMixin(ForceMixinAttrs):
     def _clear_applied_forces(self, n: int) -> None:
         for i in range(n):
             self._applied_forces[i].clear()
 
-    def _apply_forces(self, dt: float, dyn: np.ndarray, n: int) -> None:
+    def _apply_forces(
+        self, dt: float, dyn: np.ndarray, n: int
+    ) -> None:
         for force in self.forces:
             force_vectors = force.apply_force(
                 positions=self._positions[:n][dyn],

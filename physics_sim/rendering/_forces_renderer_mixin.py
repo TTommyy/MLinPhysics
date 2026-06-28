@@ -1,8 +1,11 @@
+import logging
 import math
 from typing import Any
 
 import arcade
 import numpy as np
+
+logger = logging.getLogger(__name__)
 
 # Vector field rendering constants (avoid magic numbers)
 VECTOR_MAX_LENGTH_RATIO: float = 0.40  # fraction of grid spacing
@@ -222,7 +225,8 @@ class ForcesRendererMixin:
         for f in forces:
             try:
                 rd = f.get_render_data(sample_points)
-            except Exception:
+            except Exception as e:
+                logger.warning("Force %s get_render_data failed: %s", f.name, e)
                 rd = {}
             if not isinstance(rd, dict):
                 continue

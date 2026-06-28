@@ -1,3 +1,4 @@
+import logging
 from typing import Any
 
 import numpy as np
@@ -5,6 +6,7 @@ import numpy as np
 from physics_sim.core import PhysicsEngine
 
 from .boundary_mixin import BoundaryMixin
+from .broadphase_mixin import BroadphaseMixin
 from .collision_mixin import CollisionMixin
 from .data_export_mixin import DataExportMixin
 from .energy_mixin import EnergyMixin
@@ -14,6 +16,8 @@ from .integration_mixin import IntegrationMixin
 from .pbd_mixin import PBDMixIn
 from .storage_mixin import StorageMixin
 
+logger = logging.getLogger(__name__)
+
 
 class NumpyPhysicsEngine(
     StorageMixin,
@@ -21,16 +25,20 @@ class NumpyPhysicsEngine(
     IntegrationMixin,
     PBDMixIn,
     BoundaryMixin,
+    BroadphaseMixin,
     CollisionMixin,
     EntityApiMixin,
     DataExportMixin,
     EnergyMixin,
     PhysicsEngine,
 ):
-    def __init__(self, bounds: tuple[float, float]):
+    def __init__(self, bounds: tuple[float, float], bvh: bool = True):
         PhysicsEngine.__init__(self, bounds)
         StorageMixin.__init__(self)
         self._paused: bool = False
+        self._handle_collisions = (
+            self._handle_collisions_bvh if bvh else self._handle_collisions_vectorized
+        )
 
     def step(self, dt: float) -> None:
         """Advance simulation using vectorized Euler integration with PBD constraints."""
@@ -51,6 +59,13 @@ class NumpyPhysicsEngine(
         self._apply_constraints(dt, dyn, n)
 
         self._handle_boundary_collisions_vectorized()
+        self._handle_collisions()
+
+    def _handle_collisions_bvh(self) -> None:
+        pairs = self._build_bvh_and_pairs()
+        self._resolve_with_pairs(pairs)
+
+    def _handle_collisions_vectorized(self) -> None:
         self._handle_ball_ball_collisions_vectorized()
         self._handle_ball_obstacle_collisions_vectorized()
 
@@ -89,14 +104,16 @@ class NumpyPhysicsEngine(
                     dt=dt,
                     engine_state=engine_state,
                 )
-            except Exception:
+            except Exception as e:
+                logger.warning("Force %s apply_force failed: %s", force.name, e)
                 vecs = None
             if isinstance(vecs, np.ndarray) and vecs.shape == accumulated.shape:
                 accumulated += vecs
 
             try:
-                rd = force.get_render_data(None)
-            except Exception:
+                rd = force.get_render_data(np.empty((0, 2)))
+            except Exception as e:
+                logger.warning("Force %s get_render_data failed: %s", force.name, e)
                 rd = {}
             if isinstance(rd, dict):
                 ov = rd.get("overlays")

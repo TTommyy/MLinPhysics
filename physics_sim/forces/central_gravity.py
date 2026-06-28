@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from physics_sim.core import Force
 
@@ -8,7 +11,7 @@ from physics_sim.core import Force
 class CentralGravityForce(Force):
     def __init__(
         self,
-        center: np.ndarray = [10, 5],
+        center: np.ndarray | list[float] = np.asarray([10, 5]),
         center_mass: float = 2,
         gravitational_constant: float = 1.0,
     ):
@@ -30,13 +33,13 @@ class CentralGravityForce(Force):
         dt: float,
         **kwargs,
     ) -> np.ndarray:
-        deltas = self.center - positions
-        r2 = np.sum(deltas**2, axis=1, keepdims=True)
-        r2 = np.maximum(r2, 1e-10)
-        r = np.sqrt(r2)
-        directions = deltas / r
-        magnitudes = self.G * self.center_mass * masses[:, np.newaxis] / r2
-        return directions * magnitudes
+        return _compute_central_gravity_force(
+            positions=positions,
+            masses=masses,
+            center=self.center,
+            center_mass=self.center_mass,
+            G=self.G,
+        )
 
     def get_potential_energy_contribution(
         self,
@@ -44,10 +47,13 @@ class CentralGravityForce(Force):
         masses: np.ndarray,
         **kwargs,
     ) -> float:
-        deltas = self.center - positions
-        r = np.linalg.norm(deltas, axis=1)
-        r = np.maximum(r, 1e-10)
-        return float(-self.G * self.center_mass * np.sum(masses / r))
+        return _compute_central_gravity_potential(
+            positions=positions,
+            masses=masses,
+            center=self.center,
+            center_mass=self.center_mass,
+            G=self.G,
+        )
 
     @classmethod
     def is_unique(cls) -> bool:
@@ -129,3 +135,52 @@ class CentralGravityForce(Force):
             },
         ]
         return {"overlays": overlays}
+
+
+#### END PUBLIC API
+
+
+@njit
+def _compute_central_gravity_force(
+    positions: np.ndarray,
+    masses: np.ndarray,
+    center: np.ndarray,
+    center_mass: float,
+    G: float,
+) -> np.ndarray:
+    n = positions.shape[0]
+    result = np.zeros_like(positions)
+
+    for i in range(n):
+        dx = center[0] - positions[i, 0]
+        dy = center[1] - positions[i, 1]
+        r2 = dx * dx + dy * dy
+        if r2 < 1e-10:
+            r2 = 1e-10
+        magnitude = G * center_mass * masses[i] / r2
+        result[i, 0] = dx * magnitude
+        result[i, 1] = dy * magnitude
+
+    return result
+
+
+@njit
+def _compute_central_gravity_potential(
+    positions: np.ndarray,
+    masses: np.ndarray,
+    center: np.ndarray,
+    center_mass: float,
+    G: float,
+) -> float:
+    n = positions.shape[0]
+    energy = 0.0
+
+    for i in range(n):
+        dx = center[0] - positions[i, 0]
+        dy = center[1] - positions[i, 1]
+        r2 = dx * dx + dy * dy
+        safe_r2 = r2 if r2 >= 1e-10 else 1e-10
+        r = np.sqrt(safe_r2)
+        energy -= G * center_mass * masses[i] / r
+
+    return energy

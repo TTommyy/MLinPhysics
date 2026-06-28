@@ -42,7 +42,7 @@ class Ball(PhysicalEntity):
         self.restitution = restitution
         self._drag_coefficient = drag_coefficient
         self._acceleration = np.array([0.0, 0.0])
-        self._cross_sectional_area = self._calcualate_cross_sectional_area()
+        self._cross_sectional_area = self._calculate_cross_sectional_area()
         self._friction_coefficient = friction_coefficient
 
     @property
@@ -52,7 +52,7 @@ class Ball(PhysicalEntity):
     @radius.setter
     def radius(self, value: float):
         self._radius = value
-        self._cross_sectional_area = self._calcualate_cross_sectional_area()
+        self._cross_sectional_area = self._calculate_cross_sectional_area()
 
     @property
     def friction_coefficient(self) -> float:
@@ -224,5 +224,5 @@ class Ball(PhysicalEntity):
             restitution=random.uniform(0.7, 1.0),
         )
 
-    def _calcualate_cross_sectional_area(self):
+    def _calculate_cross_sectional_area(self):
         return math.pi * (self.radius**2)

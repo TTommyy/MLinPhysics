@@ -1,11 +1,14 @@
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from physics_sim.core import Force
 
 
-class PairwiseDistancePBDFore(Force):
+class PairwiseDistancePBDForce(Force):
     """PBD constraint to keep nearby dynamic entities at a target distance.
 
     Strategy: connect each entity to its nearest neighbor within max_distance.
@@ -45,32 +48,11 @@ class PairwiseDistancePBDFore(Force):
         dt: float,
         **kwargs,
     ) -> np.ndarray:
-        n = len(positions)
-        if n < 2:
-            return positions
-
-        # Compute pairwise distances (O(n^2)) and nearest neighbor within max_distance
-        # For moderate n typical in UI, acceptable. Could be optimized later.
-        diffs = positions[:, None, :] - positions[None, :, :]
-        dists = np.linalg.norm(diffs, axis=2) + np.eye(n) * 1e9
-
-        nearest_idx = np.argmin(dists, axis=1)
-        nearest_dist = dists[np.arange(n), nearest_idx]
-
-        updated = positions.copy()
-        for i in range(n):
-            j = int(nearest_idx[i])
-            d = float(nearest_dist[i])
-            if d > self.max_distance or d <= 1e-10:
-                continue
-            delta = positions[i] - positions[j]
-            dir_ = delta / d
-            corr = self.rest_length - d
-            # Split correction by inverse masses (simple equal split for now)
-            updated[i] += 0.5 * dir_ * corr
-            updated[j] -= 0.5 * dir_ * corr
-
-        return updated
+        return _relax_pairwise_distance_positions(
+            positions=positions,
+            rest_length=self.rest_length,
+            max_distance=self.max_distance,
+        )
 
     def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
         # No vector field defined; constraints only. Provide empty.
@@ -122,3 +104,50 @@ class PairwiseDistancePBDFore(Force):
             return True
         except (ValueError, TypeError):
             return False
+
+
+#### END PUBLIC API
+
+
+@njit
+def _relax_pairwise_distance_positions(
+    positions: np.ndarray,
+    rest_length: float,
+    max_distance: float,
+) -> np.ndarray:
+    n = positions.shape[0]
+    updated = positions.copy()
+    if n < 2:
+        return updated
+
+    for i in range(n):
+        nearest_j = -1
+        nearest_dist = 1e18
+        for j in range(n):
+            if i == j:
+                continue
+            dx = positions[i, 0] - positions[j, 0]
+            dy = positions[i, 1] - positions[j, 1]
+            dist = np.sqrt(dx * dx + dy * dy)
+            if dist < nearest_dist:
+                nearest_dist = dist
+                nearest_j = j
+
+        if nearest_j < 0:
+            continue
+
+        d = nearest_dist
+        if d > max_distance or d <= 1e-10:
+            continue
+
+        dx = positions[i, 0] - positions[nearest_j, 0]
+        dy = positions[i, 1] - positions[nearest_j, 1]
+        dir_x = dx / d
+        dir_y = dy / d
+        corr = rest_length - d
+        updated[i, 0] += 0.5 * dir_x * corr
+        updated[i, 1] += 0.5 * dir_y * corr
+        updated[nearest_j, 0] -= 0.5 * dir_x * corr
+        updated[nearest_j, 1] -= 0.5 * dir_y * corr
+
+    return updated

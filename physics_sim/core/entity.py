@@ -48,8 +48,8 @@ class PhysicalEntity(Entity):
         pass
 
     @property
-    def cross_sectional_area() -> float:
-        """Cross sectional area for drag fore calculation"""
+    def cross_sectional_area(self) -> float:
+        """Cross sectional area for drag force calculation"""
         pass
 
     @property

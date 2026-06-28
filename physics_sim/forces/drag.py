@@ -2,11 +2,62 @@
 ### Based on: https://en.wikipedia.org/wiki/Drag_(physics)#The_drag_equation
 ####
 
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
+from numba import njit
 
-from physics_sim.core import Entity, Force, PhysicalEntity
+from physics_sim.core import Force
+
+
+@njit
+def _compute_drag_linear(
+    velocities: np.ndarray,
+    speeds: np.ndarray,
+    drag_coeffs: np.ndarray,
+    cross_sections: np.ndarray,
+) -> np.ndarray:
+    """JIT-compiled linear drag kernel."""
+    result = np.zeros_like(velocities)
+    mask = speeds[:, 0] > 0.001
+
+    if mask.sum() == 0:
+        return result
+
+    k = drag_coeffs[mask] * cross_sections[mask]
+    result[mask] = velocities[mask] * -k[:, np.newaxis]
+
+    return result
+
+
+@njit
+def _compute_drag_quadratic(
+    velocities: np.ndarray,
+    speeds: np.ndarray,
+    fluid_density: float,
+    drag_coeffs: np.ndarray,
+    cross_sections: np.ndarray,
+) -> np.ndarray:
+    """JIT-compiled quadratic drag kernel."""
+    result = np.zeros_like(velocities)
+    mask = speeds[:, 0] > 0.001
+
+    if mask.sum() == 0:
+        return result
+
+    magnitude = (
+        0.5
+        * fluid_density
+        * (speeds[mask] ** 2)
+        * drag_coeffs[mask, np.newaxis]
+        * cross_sections[mask, np.newaxis]
+    )
+    direction = velocities[mask] / speeds[mask]
+    result[mask] = direction * (-magnitude)
+
+    return result
 
 
 class DragForce(Force):
@@ -35,47 +86,6 @@ class DragForce(Force):
     def get_name(cls) -> str:
         return "Drag"
 
-    def apply_to(self, entity: Entity, dt: float) -> np.ndarray:
-        """Calculate drag force based on velocity."""
-        if not isinstance(entity, PhysicalEntity):
-            return np.array([0.0, 0.0])
-
-        velocity = entity.velocity
-        if isinstance(velocity, np.ndarray):
-            speed = np.linalg.norm(velocity)
-        else:
-            speed = velocity.magnitude()
-
-        if speed < 0.001:  # Avoid division by zero
-            return np.array([0.0, 0.0])
-
-        # Get entity-specific properties
-        drag_coef = entity.drag_coefficient  # C_D (0.47 for sphere)
-        cross_section = entity.cross_sectional_area
-
-        if self.linear:
-            # Simplified linear drag: F = -k * v
-            # Using C_D * A as combined coefficient
-            k = drag_coef * cross_section
-            if isinstance(velocity, np.ndarray):
-                return velocity * (-k)
-            else:
-                v_array = np.array([velocity.x, velocity.y])
-                return v_array * (-k)
-        else:
-            # Full quadratic drag equation: F = -(1/2) * ρ * v² * C_D * A * (v/|v|)
-            # Direction: opposite to velocity (v/|v|)
-            # Magnitude: (1/2) * ρ * v² * C_D * A
-            drag_magnitude = (
-                0.5 * self.fluid_density * (speed**2) * drag_coef * cross_section
-            )
-            if isinstance(velocity, np.ndarray):
-                drag_direction = velocity / speed
-            else:
-                drag_direction = velocity.normalized()
-                drag_direction = np.array([drag_direction.x, drag_direction.y])
-            return drag_direction * (-drag_magnitude)
-
     def apply_force(
         self,
         positions: np.ndarray,
@@ -94,35 +104,27 @@ class DragForce(Force):
         Returns:
             Force vectors, shape (n, 2)
         """
+        # Extract from kwargs before passing to JIT (JIT can't use kwargs.get)
         drag_coeffs = kwargs.get("drag_coeffs", np.ones(len(velocities)))
         cross_sections = kwargs.get("cross_sections", np.ones(len(velocities)))
 
         speeds = np.linalg.norm(velocities, axis=1, keepdims=True)
 
-        # Avoid division by zero
-        mask = speeds[:, 0] > 0.001
-        result = np.zeros_like(velocities)
-
-        if mask.sum() == 0:
-            return result
-
         if self.linear:
-            # Linear drag: F = -k * v
-            k = drag_coeffs[mask] * cross_sections[mask]
-            result[mask] = velocities[mask] * -k[:, np.newaxis]
-        else:
-            # Quadratic drag: F = -(1/2) * ρ * v² * C_D * A * (v/|v|)
-            magnitude = (
-                0.5
-                * self.fluid_density
-                * (speeds[mask] ** 2)
-                * drag_coeffs[mask, np.newaxis]
-                * cross_sections[mask, np.newaxis]
+            return _compute_drag_linear(
+                velocities,
+                speeds,
+                drag_coeffs,
+                cross_sections,
             )
-            direction = velocities[mask] / speeds[mask]
-            result[mask] = direction * -magnitude
-
-        return result
+        else:
+            return _compute_drag_quadratic(
+                velocities,
+                speeds,
+                self.fluid_density,
+                drag_coeffs,
+                cross_sections,
+            )
 
     @classmethod
     def is_unique(cls) -> bool:

@@ -1,6 +1,9 @@
+from __future__ import annotations
+
 from typing import Any
 
 import numpy as np
+from numba import njit
 
 from physics_sim.core import Force
 
@@ -43,17 +46,15 @@ class ExplosionImpulseForce(Force):
         if self._time > self.duration:
             return np.zeros_like(positions)
 
-        deltas = positions - self.center
-        r2 = np.sum(deltas**2, axis=1, keepdims=True)
-        r = np.sqrt(np.maximum(r2, 1e-10))
-        dirs = deltas / r
-
-        # Temporal envelope (e.g., triangular decay)
-        t_norm = max(0.0, 1.0 - self._time / self.duration)
-        impulse_mag = self.peak_impulse * t_norm
-        # Convert impulse to force over dt; add radial falloff
-        magnitude = (impulse_mag / max(dt, 1e-6)) / (r**self.falloff)
-        return dirs * magnitude
+        return _compute_explosion_impulse_force(
+            positions=positions,
+            center=self.center,
+            peak_impulse=self.peak_impulse,
+            duration=self.duration,
+            falloff=self.falloff,
+            time=self._time,
+            dt=dt,
+        )
 
     def get_render_data(self, sample_points: np.ndarray) -> dict[str, Any]:
         t_norm = max(0.0, 1.0 - self._time / self.duration)
@@ -137,3 +138,44 @@ class ExplosionImpulseForce(Force):
             return True
         except (ValueError, TypeError):
             return False
+
+
+@njit
+def _compute_explosion_impulse_force(
+    positions: np.ndarray,
+    center: np.ndarray,
+    peak_impulse: float,
+    duration: float,
+    falloff: float,
+    time: float,
+    dt: float,
+) -> np.ndarray:
+    n = positions.shape[0]
+    result = np.zeros_like(positions)
+
+    if time > duration or n == 0:
+        return result
+
+    t_norm = 1.0 - time / duration
+    if t_norm < 0.0:
+        t_norm = 0.0
+
+    impulse_mag = peak_impulse * t_norm
+    safe_dt = dt if dt > 1e-6 else 1e-6
+
+    for i in range(n):
+        dx = positions[i, 0] - center[0]
+        dy = positions[i, 1] - center[1]
+        r2 = dx * dx + dy * dy
+        safe_r2 = r2 if r2 >= 1e-10 else 1e-10
+        safe_r = np.sqrt(safe_r2)
+        dirs_x = dx / safe_r
+        dirs_y = dy / safe_r
+        falloff_term = safe_r**falloff if falloff != 0.0 else 1.0
+        if falloff_term <= 1e-12:
+            falloff_term = 1e-12
+        magnitude = (impulse_mag / safe_dt) / falloff_term
+        result[i, 0] = dirs_x * magnitude
+        result[i, 1] = dirs_y * magnitude
+
+    return result

@@ -1,7 +1,20 @@
+from typing import Protocol
+
 import numpy as np
 
+from physics_sim.core import Force
 
-class PBDMixIn:
+
+class PBDMixInAttr(Protocol):
+    forces: list[Force]
+    _positions: np.ndarray
+    _velocities: np.ndarray
+    _masses: np.ndarray
+    _entity_types: np.ndarray
+    _prev_positions: np.ndarray
+
+
+class PBDMixIn(PBDMixInAttr):
     def _apply_constraints(self, dt: float, dyn: np.ndarray, n: int) -> None:
         for force in self.forces:
             positions_new = force.apply_constraints(

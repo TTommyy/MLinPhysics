@@ -120,31 +120,6 @@ def test_bvh_large_scale() -> None:
     print(f"  - Found {len(pairs)} overlapping pairs")
 
 
-def test_3d_morton_codes() -> None:
-    """Test 3D Morton code computation."""
-    aabb_min = np.array(
-        [[0.0, 0.0, 0.0], [1.0, 1.0, 1.0], [2.0, 2.0, 2.0]], dtype=np.float64
-    )
-    aabb_max = np.array(
-        [[1.0, 1.0, 1.0], [2.0, 2.0, 2.0], [3.0, 3.0, 3.0]], dtype=np.float64
-    )
-
-    bounds_min = np.array([0.0, 0.0, 0.0], dtype=np.float64)
-    bounds_max = np.array([5.0, 5.0, 5.0], dtype=np.float64)
-
-    # Build 3D BVH
-    bvh, order = build_lbvh(aabb_min, aabb_max, bounds_min, bounds_max)
-
-    assert bvh.root >= 0, "3D BVH should have valid root"
-    assert bvh.node_min.shape[1] == 3, "3D BVH should have 3D node bounds"
-    assert bvh.node_max.shape[1] == 3, "3D BVH should have 3D node bounds"
-
-    pairs = enumerate_overlapping_pairs(bvh)
-    assert pairs.dtype == np.int32, "Pairs should be int32"
-
-    print("✓ 3D Morton code test passed")
-
-
 def run_all_tests() -> None:
     """Run all BVH verification tests."""
     print("Running BVH optimization verification tests...\n")
@@ -153,7 +128,6 @@ def run_all_tests() -> None:
     test_bvh_single_aabb()
     test_bvh_basic_correctness()
     test_bvh_large_scale()
-    test_3d_morton_codes()
 
     print("\n" + "=" * 60)
     print("✓ All BVH optimization tests passed!")

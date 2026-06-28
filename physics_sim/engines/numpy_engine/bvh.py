@@ -84,26 +84,6 @@ def _morton2d(x: np.ndarray, y: np.ndarray) -> np.ndarray:
 
 
 @njit(cache=True, fastmath=True)
-def _expand_bits_3d(v: np.ndarray) -> np.ndarray:
-    # Interleave 10-bit into 30-bit
-    x = v.astype(np.uint32)
-    x = (x | (x << 16)) & np.uint32(0x030000FF)
-    x = (x | (x << 8)) & np.uint32(0x0300F00F)
-    x = (x | (x << 4)) & np.uint32(0x030C30C3)
-    x = (x | (x << 2)) & np.uint32(0x09249249)
-    return x
-
-
-@njit(cache=True, fastmath=True)
-def _morton3d(x: np.ndarray, y: np.ndarray, z: np.ndarray) -> np.ndarray:
-    xx = _expand_bits_3d(x)
-    yy = _expand_bits_3d(y) << np.uint32(1)
-    zz = _expand_bits_3d(z) << np.uint32(2)
-    result = xx | yy | zz
-    return result
-
-
-@njit(cache=True, fastmath=True)
 def _quantize01(vals: np.ndarray) -> np.ndarray:
     # Map [0,1] -> [0, 1023]
     clipped = np.clip(vals, 0.0, 1.0)
@@ -117,21 +97,13 @@ def _quantize01(vals: np.ndarray) -> np.ndarray:
 def _compute_morton_codes_kernel(
     centers: np.ndarray, bounds_min: np.ndarray, bounds_max: np.ndarray
 ) -> np.ndarray:
-    n, d = centers.shape
-
     # Normalize to [0,1]
     size = np.maximum(bounds_max - bounds_min, 1e-12)
     norm = (centers - bounds_min) / size
 
-    if d >= 3:
-        qx = _quantize01(norm[:, 0])
-        qy = _quantize01(norm[:, 1])
-        qz = _quantize01(norm[:, 2])
-        result = _morton3d(qx, qy, qz).astype(np.uint32)
-    else:
-        qx = _quantize01(norm[:, 0])
-        qy = _quantize01(norm[:, 1])
-        result = _morton2d(qx, qy).astype(np.uint32)
+    qx = _quantize01(norm[:, 0])
+    qy = _quantize01(norm[:, 1])
+    result = _morton2d(qx, qy).astype(np.uint32)
 
     return result
 
@@ -139,6 +111,9 @@ def _compute_morton_codes_kernel(
 def _compute_morton_codes(
     centers: np.ndarray, bounds_min: np.ndarray, bounds_max: np.ndarray
 ) -> np.ndarray:
+    if centers.ndim != 2 or centers.shape[1] != 2:
+        raise ValueError("BVH Morton encoding supports 2D centers only")
+
     logger.info(f"_compute_morton_codes called with centers shape={centers.shape}")
     result = _compute_morton_codes_kernel(centers, bounds_min, bounds_max)
     logger.info(f"_compute_morton_codes returning morton codes shape={result.shape}")
@@ -204,6 +179,8 @@ def build_lbvh(
         return bvh, empty
 
     d = aabb_min.shape[1]
+    if d != 2:
+        raise ValueError("LBVH supports 2D AABBs only")
 
     centers = 0.5 * (aabb_min + aabb_max)
 

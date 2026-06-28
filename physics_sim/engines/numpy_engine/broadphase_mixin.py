@@ -31,6 +31,9 @@ class BroadphaseMixin(BroadphaseMixinAttrs):
             )
 
         d = self._positions.shape[1]
+        if d != 2:
+            raise ValueError("BVH broadphase supports 2D simulations only")
+
         et = self._entity_types[:n]
 
         is_ball = et == EntityType.BALL
@@ -102,8 +105,7 @@ class BroadphaseMixin(BroadphaseMixinAttrs):
         d = aabb_min.shape[1]
         bounds_min = np.zeros((d,), dtype=np.float64)
         bounds_max = np.zeros((d,), dtype=np.float64)
-        # Use engine bounds for first two dims, zeros elsewhere
-        bounds_max[: min(2, d)] = np.asarray(self.bounds, dtype=np.float64)[: min(2, d)]
+        bounds_max[:] = np.asarray(self.bounds, dtype=np.float64)
 
         bvh, _ = build_lbvh(aabb_min, aabb_max, bounds_min, bounds_max)
         all_pairs = enumerate_overlapping_pairs(bvh)  # indices in collider space
@@ -225,10 +227,5 @@ def _compute_rectangle_aabbs(
         if d > 1:
             aabb_min[i, 1] = positions[i, 1] - half_h
             aabb_max[i, 1] = positions[i, 1] + half_h
-
-        # Handle additional dimensions if present
-        for dim in range(2, d):
-            aabb_min[i, dim] = positions[i, dim]
-            aabb_max[i, dim] = positions[i, dim]
 
     return aabb_min, aabb_max

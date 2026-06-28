@@ -19,7 +19,7 @@ DEFAULT_STEPS = 600
 DEFAULT_TEST_CASES: list[int] = [10, 50, 100, 200, 500, 1000]
 
 
-def test_engine_performance(n_balls: int, n_steps: int = DEFAULT_STEPS) -> float:
+def benchmark_engine_performance(n_balls: int, n_steps: int = DEFAULT_STEPS) -> float:
     """Test the physics engine with a fixed number of balls and steps."""
     print(f"\n{'=' * 60}")
     print(f"Testing with {n_balls} balls for {n_steps} steps")
@@ -78,7 +78,7 @@ def run_performance_suite(
     results: dict[int, float] = {}
     for n_balls in test_cases:
         try:
-            fps = test_engine_performance(n_balls, n_steps=n_steps)
+            fps = benchmark_engine_performance(n_balls, n_steps=n_steps)
             results[n_balls] = fps
         except Exception as exc:
             logger.exception("Performance case failed for %d balls", n_balls)
@@ -94,7 +94,7 @@ def profile_engine(
 ) -> float:
     profiler = cProfile.Profile()
     profiler.enable()
-    fps = test_engine_performance(n_balls, n_steps=n_steps)
+    fps = benchmark_engine_performance(n_balls, n_steps=n_steps)
     profiler.disable()
 
     stream = io.StringIO()

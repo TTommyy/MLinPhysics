@@ -12,7 +12,7 @@ class SimulationConfig:
     # Display settings
     screen_width: int = 1200
     screen_height: int = 800
-    window_title: str = "KoczarSimulator"
+    window_title: str = "Simulator"
 
     # Layout percentages
     control_panel_width_pct: float = 0.20

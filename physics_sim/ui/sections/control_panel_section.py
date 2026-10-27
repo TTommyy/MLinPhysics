@@ -1,5 +1,4 @@
-import arcade
-import arcade.gui
+from kivy.metrics import dp
 
 from physics_sim.core import LayoutRegion
 from physics_sim.ui.control_panel import (
@@ -9,226 +8,76 @@ from physics_sim.ui.control_panel import (
     StatusDisplay,
 )
 from physics_sim.ui.sections.base_section import BaseSection
+from physics_sim.ui.widgets import Panel, TextLabel, VerticalScroll
 
 SPLIT_PCT = 0.5
 
+CONTROLS_BG = (176, 196, 222)  # light steel blue
+EDITOR_BG = (245, 245, 245)  # white smoke
+
 
 class ControlPanelSection(BaseSection):
-    """Left control panel section with GUI widgets split into controls and editor."""
+    """Left control panel: controls (top) and entity editor (bottom).
 
-    def __init__(
-        self,
-        control_region: LayoutRegion,
-    ):
-        super().__init__(control_region, background_color=(245, 245, 245))
+    Both halves are scrollable so all widgets stay reachable regardless of
+    the window size and never overlap each other.
+    """
 
-        # Split the control panel internally
-        split_height = int(control_region.height * SPLIT_PCT)
+    def __init__(self, control_region: LayoutRegion | None = None, **kwargs):
+        super().__init__(control_region, background_color=EDITOR_BG, **kwargs)
+        self.orientation = "vertical"
 
-        # Top section for controls
-        self.controls_region = LayoutRegion(
-            x=control_region.x,
-            y=control_region.y + (control_region.height - split_height),
-            width=control_region.width,
-            height=split_height,
-        )
-
-        # Bottom section for entity editor
-        self.editor_region = LayoutRegion(
-            x=control_region.x,
-            y=control_region.y,
-            width=control_region.width,
-            height=control_region.height - split_height,
-        )
-
-        # UI Managers
-        self.ui_manager = arcade.gui.UIManager()
-        self.editor_ui_manager = arcade.gui.UIManager()
-
-        # Calculate button width from region (with padding)
-        button_width = max(120, control_region.width - 50)
-
-        # Widget components
-        self.placement_controls = PlacementControls(button_width)
-        self.display_controls = DisplayControls(button_width)
+        self.placement_controls = PlacementControls()
+        self.display_controls = DisplayControls()
         self.status_display = StatusDisplay()
-        self.entity_editor = EntityEditorPanel(button_width)
+        self.entity_editor = EntityEditorPanel()
 
-        # We'll setup UI after we know the window dimensions
-        self._ui_needs_setup = True
-
-        # Batched shapes cache
-        self._panel_shapes = None
-        self._panel_cache_key = None
-
-    def _setup_ui(self, window_height: int):
-        """Setup UI layout for controls section."""
-        v_box = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
-
-        # Title
-        title = arcade.gui.UILabel(
-            text="CONTROLS",
-            font_size=16,
-            bold=True,
-            text_color=arcade.color.BLACK,
+        # --- Controls (top half)
+        self.controls_panel = Panel(
+            background_color=CONTROLS_BG,
+            border_color=(120, 120, 120),
+            orientation="vertical",
+            size_hint_y=SPLIT_PCT,
         )
-        v_box.add(title)
-        v_box.add(arcade.gui.UISpace(height=5))
+        self.controls_scroll = VerticalScroll(spacing=8, padding=[dp(10), dp(8)])
+        content = self.controls_scroll.content
+        content.add_widget(TextLabel("CONTROLS", font_size=17, bold=True))
+        content.add_widget(self.display_controls.get_layout())
+        content.add_widget(self.status_display.get_layout())
+        content.add_widget(self.placement_controls.get_layout())
+        self.controls_panel.add_widget(self.controls_scroll)
 
-        # Add widget groups
-        v_box.add(self.display_controls.get_layout())
-        v_box.add(arcade.gui.UISpace(height=10))
-
-        v_box.add(self.status_display.get_layout())
-        v_box.add(arcade.gui.UISpace(height=15))
-
-        v_box.add(self.placement_controls.get_layout())
-        v_box.add(arcade.gui.UISpace(height=10))
-
-        # Create anchor positioned at the top of controls region
-        anchor = arcade.gui.UIAnchorLayout()
-        # Calculate offset from window top to controls region top
-        offset_from_top = -(window_height - self.controls_region.top) - 20
-        anchor.add(
-            child=v_box,
-            anchor_x="left",
-            anchor_y="top",
-            align_x=15,
-            align_y=offset_from_top,
+        # --- Entity editor (bottom half)
+        self.editor_panel = Panel(
+            background_color=EDITOR_BG,
+            border_color=(120, 120, 120),
+            orientation="vertical",
+            size_hint_y=1 - SPLIT_PCT,
         )
-
-        self.ui_manager.add(anchor)
-
-    def _setup_editor_ui(self, window_height: int):
-        """Setup entity editor UI for editor section."""
-        editor_box = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
-
-        # Title
-        title = arcade.gui.UILabel(
-            text="ENTITY EDITOR",
-            font_size=16,
-            bold=True,
-            text_color=arcade.color.BLACK,
+        self.editor_scroll = VerticalScroll(spacing=6, padding=[dp(10), dp(8)])
+        self.editor_scroll.content.add_widget(
+            TextLabel("ENTITY EDITOR", font_size=17, bold=True)
         )
-        editor_box.add(title)
-        editor_box.add(arcade.gui.UISpace(height=5))
+        self.editor_scroll.content.add_widget(self.entity_editor.get_layout())
+        self.editor_panel.add_widget(self.editor_scroll)
 
-        # Add editor panel layout
-        editor_box.add(self.entity_editor.get_layout())
+        self.add_widget(self.controls_panel)
+        self.add_widget(self.editor_panel)
 
-        # Create anchor positioned at the top of editor region
-        editor_anchor = arcade.gui.UIAnchorLayout()
-        # Calculate offset from window top to editor region top
-        offset_from_top = -(window_height - self.editor_region.top) - 20
-        editor_anchor.add(
-            child=editor_box,
-            anchor_x="left",
-            anchor_y="top",
-            align_x=15,
-            align_y=offset_from_top,
-        )
-
-        self.editor_ui_manager.add(editor_anchor)
-
-    def on_draw(self):
-        """Draw the control panel section with internal split layout."""
-        # Setup UI if needed (on first draw when we have window context)
-        if self._ui_needs_setup:
-            window = arcade.get_window()
-            if window:
-                self._setup_ui(window.height)
-                self._setup_editor_ui(window.height)
-                self._ui_needs_setup = False
-
-        # Build/reuse batched shapes for panel backgrounds and borders
-        key = (
-            self.controls_region.left,
-            self.controls_region.right,
-            self.controls_region.bottom,
-            self.controls_region.top,
-            self.editor_region.left,
-            self.editor_region.right,
-            self.editor_region.bottom,
-            self.editor_region.top,
-            self.region.right,
-            self.region.bottom,
-            self.region.top,
-        )
-        if key != self._panel_cache_key:
-            self._panel_cache_key = key
-            shapes = arcade.shape_list.ShapeElementList()
-
-            # Controls background
-            cx = (self.controls_region.left + self.controls_region.right) * 0.5
-            cy = (self.controls_region.bottom + self.controls_region.top) * 0.5
-            cw = float(self.controls_region.right - self.controls_region.left)
-            ch = float(self.controls_region.top - self.controls_region.bottom)
-            shapes.append(
-                arcade.shape_list.create_rectangle_filled(
-                    cx, cy, cw, ch, arcade.color.LIGHT_STEEL_BLUE
-                )
-            )
-
-            # Editor background
-            ex = (self.editor_region.left + self.editor_region.right) * 0.5
-            ey = (self.editor_region.bottom + self.editor_region.top) * 0.5
-            ew = float(self.editor_region.right - self.editor_region.left)
-            eh = float(self.editor_region.top - self.editor_region.bottom)
-            shapes.append(
-                arcade.shape_list.create_rectangle_filled(
-                    ex, ey, ew, eh, arcade.color.WHITE_SMOKE
-                )
-            )
-
-            # Separator line
-            shapes.append(
-                arcade.shape_list.create_line(
-                    self.editor_region.left,
-                    self.editor_region.top,
-                    self.editor_region.right,
-                    self.editor_region.top,
-                    arcade.color.BLACK_LEATHER_JACKET,
-                    4,
-                )
-            )
-
-            # Right border line
-            shapes.append(
-                arcade.shape_list.create_line(
-                    self.region.right,
-                    self.region.bottom,
-                    self.region.right,
-                    self.region.top,
-                    (200, 200, 200),
-                    2,
-                )
-            )
-
-            self._panel_shapes = shapes
-
-        if self._panel_shapes is not None:
-            self._panel_shapes.draw()
-
-        # Draw UI elements
-        self.ui_manager.draw()
-        self.editor_ui_manager.draw()
-
-    def on_update(self, delta_time: float):
-        """Update section."""
-        pass
-
-    def enable(self):
-        """Enable UI managers."""
-        self.ui_manager.enable()
-        self.editor_ui_manager.enable()
+    def update_status(self, add_mode: bool | None = None, paused: bool | None = None):
+        """Refresh the status/mode indicator."""
+        if add_mode is None:
+            add_mode = self.placement_controls.add_mode
+        if paused is None:
+            paused = self.display_controls.is_paused
+        self.status_display.set_mode(add_mode, paused)
 
     def set_forces_toggle_handler(self, handler):
         self.display_controls.on_forces_toggle = handler
 
-    def disable(self):
-        """Disable UI managers."""
-        self.ui_manager.disable()
-        self.editor_ui_manager.disable()
+    def on_draw(self):
+        """Kept for API compatibility (Kivy widgets draw themselves)."""
+        pass
 
 
 __all__: list[str] = ["ControlPanelSection"]

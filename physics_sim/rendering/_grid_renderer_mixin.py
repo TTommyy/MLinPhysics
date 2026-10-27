@@ -1,23 +1,40 @@
 import math
 
-import arcade
+from kivy.graphics import Color, Ellipse, InstructionGroup, Line, Rectangle
+
+from physics_sim.ui.utils import format_number
+
+
+def _rgb(c: tuple[int, int, int], a: float = 1.0) -> tuple[float, float, float, float]:
+    return (c[0] / 255.0, c[1] / 255.0, c[2] / 255.0, a)
 
 
 class GridRendererMixin:
-    """Mixin for rendering coordinate grid and axis labels."""
+    """Mixin for rendering coordinate grid and axis labels on a Kivy canvas."""
 
     # Grid styling constants
     _GRID_MAJOR_INTERVAL: int = 2
     _GRID_TARGET_PIXELS: int = 50
-    _MINOR_GRID_COLOR: tuple[int, int, int] = (240, 240, 240)
-    _MAJOR_GRID_COLOR: tuple[int, int, int] = (200, 200, 200)
+    _MINOR_GRID_COLOR: tuple[int, int, int] = (225, 225, 225)
+    _MAJOR_GRID_COLOR: tuple[int, int, int] = (190, 190, 190)
     _AXIS_COLOR: tuple[int, int, int] = (100, 100, 100)
     _ORIGIN_COLOR: tuple[int, int, int] = (80, 80, 255)
     _LABEL_COLOR: tuple[int, int, int] = (60, 60, 60)
     _MINOR_GRID_WIDTH: float = 1.0
-    _MAJOR_GRID_WIDTH: float = 2.0
-    _AXIS_WIDTH: float = 3.0
+    _MAJOR_GRID_WIDTH: float = 1.2
+    _AXIS_WIDTH: float = 1.6
     _ORIGIN_RADIUS_PX: float = 4.0
+    _LABEL_FONT_SIZE: float = 10
+
+    grid_group: InstructionGroup
+
+    def _init_grid_renderer(self) -> None:
+        self._grid_cache_key: tuple | None = None
+
+    def invalidate_grid(self) -> None:
+        """Force the grid (and grid sample points) to be rebuilt."""
+        self._grid_cache_key = None
+        self._grid_sample_points = None
 
     def render_grid(self, base_spacing: int = 1) -> None:
         """Render coordinate grid with major/minor lines and labels.
@@ -26,22 +43,15 @@ class GridRendererMixin:
             base_spacing: Base spacing in physics units (will be adapted)
         """
         if not self.show_grid:
+            if self._grid_cache_key != "hidden":
+                self.grid_group.clear()
+                self._grid_cache_key = "hidden"
             return
 
-        # Calculate adaptive spacing based on scale
+        if self.region.width <= 0 or self.region.height <= 0:
+            return
+
         spacing = self._calculate_grid_spacing(base_spacing)
-
-        # Prepare cache containers
-        if not hasattr(self, "_grid_cache_key"):
-            self._grid_cache_key = None
-            self._grid_shape_minor_v = None
-            self._grid_shape_minor_h = None
-            self._grid_shape_major_v = None
-            self._grid_shape_major_h = None
-            self._grid_shape_axes = None
-            self._grid_shape_origin = None
-            self._grid_text_labels: list[arcade.Text] = []
-
         key = (
             float(self.scale),
             float(self.region.left),
@@ -50,159 +60,66 @@ class GridRendererMixin:
             float(self.region.top),
             float(spacing),
         )
+        if key == self._grid_cache_key:
+            return
+        self._grid_cache_key = key
+        self._build_grid(spacing)
 
-        if key != self._grid_cache_key:
-            # Rebuild shapes and labels
-            self._grid_cache_key = key
+    def _build_grid(self, spacing: float) -> None:
+        group = self.grid_group
+        group.clear()
 
-            # Get axis positions
-            screen_x_axis = self.physics_to_screen_x(0)
-            screen_y_axis = self.physics_to_screen_y(0)
+        minor_v, major_v, labels_v = self._collect_vertical_lines(
+            spacing, self._GRID_MAJOR_INTERVAL
+        )
+        minor_h, major_h, labels_h = self._collect_horizontal_lines(
+            spacing, self._GRID_MAJOR_INTERVAL
+        )
 
-            # Collect grid lines
-            minor_v, major_v, labels_v = self._collect_vertical_lines(
-                spacing, self._GRID_MAJOR_INTERVAL
-            )
-            minor_h, major_h, labels_h = self._collect_horizontal_lines(
-                spacing, self._GRID_MAJOR_INTERVAL
-            )
+        def add_segments(points: list[tuple[float, float]], color, width) -> None:
+            if not points:
+                return
+            group.add(Color(*_rgb(color)))
+            for i in range(0, len(points) - 1, 2):
+                (x0, y0), (x1, y1) = points[i], points[i + 1]
+                group.add(Line(points=[x0, y0, x1, y1], width=width))
 
-            # Build line shapes
-            def _mk_colors(
-                num: int, rgb: tuple[int, int, int]
-            ) -> list[tuple[int, int, int, int]]:
-                r, g, b = rgb
-                return [(r, g, b, 255)] * num
+        add_segments(minor_v + minor_h, self._MINOR_GRID_COLOR, self._MINOR_GRID_WIDTH)
+        add_segments(major_v + major_h, self._MAJOR_GRID_COLOR, self._MAJOR_GRID_WIDTH)
 
-            self._grid_shape_minor_v = (
-                arcade.shape_list.create_lines_with_colors(
-                    minor_v,
-                    _mk_colors(len(minor_v), self._MINOR_GRID_COLOR),
-                    self._MINOR_GRID_WIDTH,
-                )
-                if minor_v
-                else None
-            )
-            self._grid_shape_minor_h = (
-                arcade.shape_list.create_lines_with_colors(
-                    minor_h,
-                    _mk_colors(len(minor_h), self._MINOR_GRID_COLOR),
-                    self._MINOR_GRID_WIDTH,
-                )
-                if minor_h
-                else None
-            )
-            self._grid_shape_major_v = (
-                arcade.shape_list.create_lines_with_colors(
-                    major_v,
-                    _mk_colors(len(major_v), self._MAJOR_GRID_COLOR),
-                    self._MAJOR_GRID_WIDTH,
-                )
-                if major_v
-                else None
-            )
-            self._grid_shape_major_h = (
-                arcade.shape_list.create_lines_with_colors(
-                    major_h,
-                    _mk_colors(len(major_h), self._MAJOR_GRID_COLOR),
-                    self._MAJOR_GRID_WIDTH,
-                )
-                if major_h
-                else None
-            )
+        # Axes
+        screen_x_axis = self.physics_to_screen_x(0)
+        screen_y_axis = self.physics_to_screen_y(0)
+        axes: list[tuple[float, float]] = []
+        if self.region.left <= screen_x_axis <= self.region.right:
+            axes += [(screen_x_axis, self.region.bottom), (screen_x_axis, self.region.top)]
+        if self.region.bottom <= screen_y_axis <= self.region.top:
+            axes += [(self.region.left, screen_y_axis), (self.region.right, screen_y_axis)]
+        add_segments(axes, self._AXIS_COLOR, self._AXIS_WIDTH)
 
-            # Axes
-            axes_shapes = arcade.shape_list.ShapeElementList()
-            has_axis = False
-            if self.region.left <= screen_x_axis <= self.region.right:
-                axes_shapes.append(
-                    arcade.shape_list.create_line(
-                        screen_x_axis,
-                        self.region.bottom,
-                        screen_x_axis,
-                        self.region.top,
-                        self._AXIS_COLOR,
-                        self._AXIS_WIDTH,
-                    )
-                )
-                has_axis = True
-            if self.region.bottom <= screen_y_axis <= self.region.top:
-                axes_shapes.append(
-                    arcade.shape_list.create_line(
-                        self.region.left,
-                        screen_y_axis,
-                        self.region.right,
-                        screen_y_axis,
-                        self._AXIS_COLOR,
-                        self._AXIS_WIDTH,
-                    )
-                )
-                has_axis = True
-            self._grid_shape_axes = axes_shapes if has_axis else None
+        # Origin marker
+        if (
+            self.region.left <= screen_x_axis <= self.region.right
+            and self.region.bottom <= screen_y_axis <= self.region.top
+        ):
+            r = self._ORIGIN_RADIUS_PX
+            group.add(Color(*_rgb(self._ORIGIN_COLOR)))
+            group.add(Ellipse(pos=(screen_x_axis - r, screen_y_axis - r), size=(2 * r, 2 * r)))
 
-            # Origin marker
-            origin_x = self.physics_to_screen_x(0)
-            origin_y = self.physics_to_screen_y(0)
-            if (
-                self.region.left <= origin_x <= self.region.right
-                and self.region.bottom <= origin_y <= self.region.top
-            ):
-                self._grid_shape_origin = arcade.shape_list.create_ellipse_filled(
-                    origin_x,
-                    origin_y,
-                    self._ORIGIN_RADIUS_PX * 2,
-                    self._ORIGIN_RADIUS_PX * 2,
-                    self._ORIGIN_COLOR,
-                )
-            else:
-                self._grid_shape_origin = None
-
-            # Labels (Text objects are faster than draw_text)
-            self._grid_text_labels = []
-            for label_text, x, y in labels_v + labels_h:
-                self._grid_text_labels.append(
-                    arcade.Text(
-                        label_text,
-                        x,
-                        y,
-                        self._LABEL_COLOR,
-                        9,
-                        bold=True,
-                    )
-                )
-
-        # Draw cached shapes
-        if self._grid_shape_minor_v:
-            self._grid_shape_minor_v.draw()
-        if self._grid_shape_minor_h:
-            self._grid_shape_minor_h.draw()
-        if self._grid_shape_major_v:
-            self._grid_shape_major_v.draw()
-        if self._grid_shape_major_h:
-            self._grid_shape_major_h.draw()
-        if self._grid_shape_axes:
-            self._grid_shape_axes.draw()
-        if self._grid_shape_origin:
-            self._grid_shape_origin.draw()
-        for t in self._grid_text_labels:
-            t.draw()
+        # Labels
+        label_color = _rgb(self._LABEL_COLOR)
+        group.add(Color(1, 1, 1, 1))
+        for text, x, y in labels_v + labels_h:
+            texture = self._text_cache.get(text, self._LABEL_FONT_SIZE, label_color, True)
+            group.add(Rectangle(texture=texture, size=texture.size, pos=(x, y)))
 
     def _calculate_grid_spacing(self, base_spacing: float) -> float:
         """Calculate adaptive grid spacing based on zoom level.
 
-        Returns spacing that keeps grid density reasonable.
-        Ensures spacing is in "nice" numbers (1, 2, 5, 10, 20, 50, etc.)
+        Returns spacing in "nice" numbers (1, 2, 5, 10, 20, 50, etc.)
         """
-        # Calculate how many pixels per physics unit
-        pixels_per_unit = self.scale
-
-        # Target: grid lines every ~_GRID_TARGET_PIXELS pixels
-        target_pixels = self._GRID_TARGET_PIXELS
-
-        # Calculate ideal spacing
-        ideal_spacing = target_pixels / pixels_per_unit
-
-        # Round to nice number (1, 2, 5) * 10^n
+        pixels_per_unit = max(self.scale, 1e-9)
+        ideal_spacing = self._GRID_TARGET_PIXELS / pixels_per_unit
         magnitude = 10 ** math.floor(math.log10(ideal_spacing))
         normalized = ideal_spacing / magnitude
 
@@ -217,114 +134,67 @@ class GridRendererMixin:
 
         return max(nice_spacing, base_spacing)
 
-    def _collect_vertical_lines(
-        self, spacing: float, major_interval: int
-    ) -> tuple[
-        list[tuple[float, float]],
-        list[tuple[float, float]],
-        list[tuple[str, float, float]],
-    ]:
-        """Collect vertical grid lines (minor, major, labels).
+    @staticmethod
+    def _is_major(value: float, spacing: float, major_interval: int) -> bool:
+        step = spacing * major_interval
+        ratio = value / step
+        return abs(ratio - round(ratio)) < 1e-6
+
+    def _collect_vertical_lines(self, spacing: float, major_interval: int):
+        """Collect vertical grid lines.
 
         Returns:
-            (minor_lines, major_lines, labels)
-            labels are (text, x, y) tuples
+            (minor_lines, major_lines, labels); labels are (text, x, y) tuples
         """
-        minor_lines = []
-        major_lines = []
-        labels = []
+        minor_lines: list[tuple[float, float]] = []
+        major_lines: list[tuple[float, float]] = []
+        labels: list[tuple[str, float, float]] = []
 
-        # Find range of x values to draw
-        x_min = (
-            math.floor(self.screen_to_physics_x(self.region.left) / spacing) * spacing
-        )
-        x_max = (
-            math.ceil(self.screen_to_physics_x(self.region.right) / spacing) * spacing
-        )
+        i_min = math.floor(self.screen_to_physics_x(self.region.left) / spacing)
+        i_max = math.ceil(self.screen_to_physics_x(self.region.right) / spacing)
+        screen_y_axis = self.physics_to_screen_y(0)
+        axis_visible = self.region.bottom <= screen_y_axis <= self.region.top
 
-        x = x_min
-        while x <= x_max:
+        for i in range(i_min, i_max + 1):
+            x = i * spacing
             screen_x = self.physics_to_screen_x(x)
-            if self.region.left <= screen_x <= self.region.right:
-                is_major = abs(x % (spacing * major_interval)) < 0.01
-
-                if is_major and x != 0:
-                    major_lines.append((screen_x, self.region.bottom))
-                    major_lines.append((screen_x, self.region.top))
-
-                    # Label position: below axis or at bottom
-                    screen_y_axis = self.physics_to_screen_y(0)
-                    label_y = (
-                        screen_y_axis - 15
-                        if self.region.bottom <= screen_y_axis <= self.region.top
-                        else self.region.bottom + 5
-                    )
-
-                    labels.append((
-                        f"{int(x) if x == int(x) else x}",
-                        screen_x - 10,
-                        label_y,
-                    ))
-                elif not is_major and x != 0:
-                    minor_lines.append((screen_x, self.region.bottom))
-                    minor_lines.append((screen_x, self.region.top))
-
-            x += spacing
-
+            if not (self.region.left <= screen_x <= self.region.right) or i == 0:
+                continue
+            if self._is_major(x, spacing, major_interval):
+                major_lines += [(screen_x, self.region.bottom), (screen_x, self.region.top)]
+                label_y = screen_y_axis - 16 if axis_visible else self.region.bottom + 4
+                label_y = max(label_y, self.region.bottom + 2)
+                labels.append((format_number(x), screen_x + 2, label_y))
+            else:
+                minor_lines += [(screen_x, self.region.bottom), (screen_x, self.region.top)]
         return minor_lines, major_lines, labels
 
-    def _collect_horizontal_lines(
-        self, spacing: float, major_interval: int
-    ) -> tuple[
-        list[tuple[float, float]],
-        list[tuple[float, float]],
-        list[tuple[str, float, float]],
-    ]:
-        """Collect horizontal grid lines (minor, major, labels).
+    def _collect_horizontal_lines(self, spacing: float, major_interval: int):
+        """Collect horizontal grid lines.
 
         Returns:
-            (minor_lines, major_lines, labels)
-            labels are (text, x, y) tuples
+            (minor_lines, major_lines, labels); labels are (text, x, y) tuples
         """
-        minor_lines = []
-        major_lines = []
-        labels = []
+        minor_lines: list[tuple[float, float]] = []
+        major_lines: list[tuple[float, float]] = []
+        labels: list[tuple[str, float, float]] = []
 
-        # Find range of y values to draw
-        y_min = (
-            math.floor(self.screen_to_physics_y(self.region.bottom) / spacing) * spacing
-        )
-        y_max = math.ceil(self.screen_to_physics_y(self.region.top) / spacing) * spacing
+        j_min = math.floor(self.screen_to_physics_y(self.region.bottom) / spacing)
+        j_max = math.ceil(self.screen_to_physics_y(self.region.top) / spacing)
+        screen_x_axis = self.physics_to_screen_x(0)
+        axis_visible = self.region.left <= screen_x_axis <= self.region.right
 
-        y = y_min
-        while y <= y_max:
+        for j in range(j_min, j_max + 1):
+            y = j * spacing
             screen_y = self.physics_to_screen_y(y)
-            if self.region.bottom <= screen_y <= self.region.top:
-                is_major = abs(y % (spacing * major_interval)) < 0.01
-
-                if is_major and y != 0:
-                    major_lines.append((self.region.left, screen_y))
-                    major_lines.append((self.region.right, screen_y))
-
-                    # Label position: left of axis or at left edge
-                    screen_x_axis = self.physics_to_screen_x(0)
-                    label_x = (
-                        screen_x_axis - 25
-                        if self.region.left <= screen_x_axis <= self.region.right
-                        else self.region.left + 5
-                    )
-
-                    labels.append((
-                        f"{int(y) if y == int(y) else y}",
-                        label_x,
-                        screen_y - 5,
-                    ))
-                elif not is_major and y != 0:
-                    minor_lines.append((self.region.left, screen_y))
-                    minor_lines.append((self.region.right, screen_y))
-
-            y += spacing
-
+            if not (self.region.bottom <= screen_y <= self.region.top) or j == 0:
+                continue
+            if self._is_major(y, spacing, major_interval):
+                major_lines += [(self.region.left, screen_y), (self.region.right, screen_y)]
+                label_x = screen_x_axis + 4 if axis_visible else self.region.left + 4
+                labels.append((format_number(y), label_x, screen_y + 2))
+            else:
+                minor_lines += [(self.region.left, screen_y), (self.region.right, screen_y)]
         return minor_lines, major_lines, labels
 
     # Helper to sample physics-space grid intersections for force field rendering
@@ -333,47 +203,31 @@ class GridRendererMixin:
     ) -> list[tuple[float, float]]:
         if self._grid_sample_points:
             return self._grid_sample_points
+        if self.region.width <= 0 or self.region.height <= 0:
+            return []
 
         spacing = (
             max(self._calculate_grid_spacing(1), custom_spacing)
             if custom_spacing is not None
             else self._calculate_grid_spacing(1)
         )
-        major_interval = 2
+        major_interval = self._GRID_MAJOR_INTERVAL
 
-        # Collect x and y coordinates for intersections
-        x_min = (
-            math.ceil(self.screen_to_physics_x(self.region.left) / spacing) * spacing
-        )
-        x_max = (
-            math.floor(self.screen_to_physics_x(self.region.right) / spacing) * spacing
-        )
-        y_min = (
-            math.ceil(self.screen_to_physics_y(self.region.bottom) / spacing) * spacing
-        )
-        y_max = (
-            math.floor(self.screen_to_physics_y(self.region.top) / spacing) * spacing
-        )
+        i_min = math.ceil(self.screen_to_physics_x(self.region.left) / spacing)
+        i_max = math.floor(self.screen_to_physics_x(self.region.right) / spacing)
+        j_min = math.ceil(self.screen_to_physics_y(self.region.bottom) / spacing)
+        j_max = math.floor(self.screen_to_physics_y(self.region.top) / spacing)
 
-        xs = []
-        x = x_min
-        while x <= x_max:
-            is_major = abs(x % (spacing * major_interval)) < 0.01
-            if include_minor or is_major or abs(x) < 1e-9:
-                xs.append(x)
-            x += spacing
-
-        ys = []
-        y = y_min
-        while y <= y_max:
-            is_major = abs(y % (spacing * major_interval)) < 0.01
-            if include_minor or is_major or abs(y) < 1e-9:
-                ys.append(y)
-            y += spacing
-
-        points: list[tuple[float, float]] = []
-        for xv in xs:
-            for yv in ys:
-                points.append((float(xv), float(yv)))
+        xs = [
+            i * spacing
+            for i in range(i_min, i_max + 1)
+            if include_minor or i == 0 or self._is_major(i * spacing, spacing, major_interval)
+        ]
+        ys = [
+            j * spacing
+            for j in range(j_min, j_max + 1)
+            if include_minor or j == 0 or self._is_major(j * spacing, spacing, major_interval)
+        ]
+        points = [(float(xv), float(yv)) for xv in xs for yv in ys]
         self._grid_sample_points = points
         return points

@@ -1,10 +1,16 @@
-import arcade.gui
+from physics_sim.ui.widgets import (
+    BUTTON_ACTIVE_COLOR,
+    BUTTON_COLOR,
+    FlatButton,
+    TextLabel,
+    vbox,
+)
 
 
 class PlacementControls:
     """Widget group for entity placement controls."""
 
-    def __init__(self, button_width: int = 220):
+    def __init__(self, button_width: int | None = None):
         self.add_mode = False
         self.available_entity_types: list[type] = []
         self.selected_entity_type_index = 0
@@ -13,46 +19,35 @@ class PlacementControls:
         self.on_add_mode_toggle = None
         self.on_object_type_change = None
 
-        self.layout = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
+        self.layout = vbox(spacing=6)
         self._build()
 
     def _build(self):
         """Build widget layout."""
-        # Section label
-        label = arcade.gui.UILabel(
-            text="Object Placement",
-            font_size=10,
-            text_color=arcade.color.BLACK_LEATHER_JACKET,
-        )
-        self.layout.add(label)
+        self.layout.add_widget(TextLabel("Object Placement", font_size=13, bold=True))
 
-        # Add mode toggle
-        self.add_mode_button = arcade.gui.UIFlatButton(
-            text="Add Mode: OFF",
-            width=self.button_width,
-            height=35,
-        )
-        self.add_mode_button.on_click = self._toggle_add_mode
-        self.layout.add(self.add_mode_button)
+        self.add_mode_button = FlatButton("Add Mode: OFF")
+        self.add_mode_button.bind(on_release=self._toggle_add_mode)
+        self.layout.add_widget(self.add_mode_button)
 
-        # Object type selector
-        self.object_type_button = arcade.gui.UIFlatButton(
-            text="Type: (no engine)",
-            width=self.button_width,
-            multiline=True,
-            height=40,
-        )
-        self.object_type_button.on_click = self._cycle_object_type
-        self.layout.add(self.object_type_button)
+        self.object_type_button = FlatButton("Type: (no engine)")
+        self.object_type_button.bind(on_release=self._cycle_object_type)
+        self.layout.add_widget(self.object_type_button)
 
-    def _toggle_add_mode(self, event):
+    def _refresh_add_mode_button(self):
+        self.add_mode_button.text = f"Add Mode: {'ON' if self.add_mode else 'OFF'}"
+        self.add_mode_button.set_color(
+            BUTTON_ACTIVE_COLOR if self.add_mode else BUTTON_COLOR
+        )
+
+    def _toggle_add_mode(self, *_):
         """Toggle add mode on/off."""
         self.add_mode = not self.add_mode
-        self.add_mode_button.text = f"Add Mode: {'ON' if self.add_mode else 'OFF'}"
+        self._refresh_add_mode_button()
         if self.on_add_mode_toggle:
             self.on_add_mode_toggle(self.add_mode)
 
-    def _cycle_object_type(self, event):
+    def _cycle_object_type(self, *_):
         """Cycle through available entity types."""
         if not self.available_entity_types:
             return
@@ -66,14 +61,13 @@ class PlacementControls:
             self.on_object_type_change(entity_class)
 
     def set_add_mode(self, enabled: bool):
-        """Set add mode programmatically."""
-        if self.add_mode != enabled:
-            self.add_mode = enabled
-            self.add_mode_button.text = f"Add Mode: {'ON' if self.add_mode else 'OFF'}"
+        """Set add mode programmatically (does not fire callbacks)."""
+        self.add_mode = enabled
+        self._refresh_add_mode_button()
 
     def set_available_entity_types(self, entity_types: list[type]):
         """Set available entity types."""
-        self.available_entity_types = entity_types
+        self.available_entity_types = list(entity_types)
         self.selected_entity_type_index = 0
         if entity_types:
             self.object_type_button.text = f"Type: {entity_types[0].__name__}"
@@ -90,7 +84,7 @@ class PlacementControls:
         """Cycle to next entity type (for keyboard shortcut)."""
         self._cycle_object_type(None)
 
-    def get_layout(self) -> arcade.gui.UIBoxLayout:
+    def get_layout(self):
         """Get the widget layout."""
         return self.layout
 

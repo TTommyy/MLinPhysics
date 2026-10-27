@@ -1,369 +1,210 @@
-import arcade
-import arcade.gui
+from kivy.metrics import dp
+from kivy.uix.label import Label
+from kivy.utils import escape_markup
 
 from physics_sim.core import LayoutRegion
 from physics_sim.ui.sections.base_section import BaseSection
+from physics_sim.ui.utils import color_to_rgba, format_number, format_vector_for_display
+from physics_sim.ui.widgets import (
+    MUTED_TEXT_COLOR,
+    FlatButton,
+    Panel,
+    TextLabel,
+    VerticalScroll,
+    hbox,
+)
+
+PANEL_BG = (22, 160, 133)  # green sea
+CARD_BG = (250, 250, 250)
+HEADER_COLOR = (41, 128, 185)
+LABEL_COLOR = (0, 120, 120)
+FORCE_COLOR = (192, 57, 43)
+
+
+def _vec(values) -> str:
+    return format_vector_for_display(values).replace("[", "(").replace("]", ")")
 
 
 class InventoryPanelSection(BaseSection):
-    """Right panel section displaying entity inventory with pagination."""
+    """Right panel section displaying the entity inventory with pagination."""
 
-    def __init__(self, region: LayoutRegion):
-        super().__init__(region, background_color=arcade.uicolor.GREEN_GREEN_SEA)
-
-        self.panel_width = region.width
-        self.panel_x = region.x
+    def __init__(self, region: LayoutRegion | None = None, items_per_page: int = 5, **kwargs):
+        super().__init__(region, background_color=PANEL_BG, **kwargs)
+        self.orientation = "vertical"
+        self.padding = [dp(8), dp(8)]
+        self.spacing = dp(6)
 
         # Pagination state
         self.current_page = 0
-        self.items_per_page = 5
-        self.total_pages = 0
-
-        # UI Manager for buttons
-        self.ui_manager = arcade.gui.UIManager()
-
-        # Text cache for performance
-        self.entity_text_cache = {}
+        self.items_per_page = max(1, int(items_per_page))
+        self.total_pages = 1
 
         # Cache for inventory data and rendered entities
         self._cached_inventory_data: list[dict] = []
         self._cached_page_entities: list[dict] = []
+        self.card_widgets: list[Panel] = []
 
-        self._create_text_objects()
-        self._create_pagination_ui()
+        self._build()
+        self._refresh_page()
 
-        # Cache for card background shapes per page
-        self._card_shapes_cache_key = None
-        self._card_shapes = None
-
-    def _create_text_objects(self):
-        """Create reusable text objects."""
-        self.page_indicator_text = arcade.Text(
-            "Page 1/1",
-            self.region.center_x,
-            self.region.bottom + 50,
-            arcade.color.BLACK,
-            10,
-            anchor_x="center",
+    # ------------------------------------------------------------------ build
+    def _build(self):
+        self.title_label = TextLabel(
+            "INVENTORY", font_size=17, bold=True, color=(255, 255, 255)
         )
-
-    def _create_pagination_ui(self):
-        """Create pagination buttons."""
-        button_width = 80
-        button_height = 30
-        button_margin = 20
-
-        # Previous button
-        self.prev_button = arcade.gui.UIFlatButton(
-            text="Previous",
-            width=button_width,
-            height=button_height,
-            x=self.region.left + button_margin,
-            y=self.region.bottom + 10,
+        self.add_widget(self.title_label)
+        self.summary_label = TextLabel(
+            "Entities: 0", font_size=12, color=(240, 240, 240)
         )
-        self.prev_button.on_click = self._on_prev_page
+        self.add_widget(self.summary_label)
 
-        # Next button
-        self.next_button = arcade.gui.UIFlatButton(
-            text="Next",
-            width=button_width,
-            height=button_height,
-            x=self.region.right - button_width - button_margin,
-            y=self.region.bottom + 10,
+        self.cards_scroll = VerticalScroll(spacing=8)
+        self.add_widget(self.cards_scroll)
+
+        row = hbox(spacing=6, height=dp(34))
+        self.prev_button = FlatButton("Prev", size_hint_x=0.8)
+        self.prev_button.bind(on_release=self._on_prev_page)
+        self.page_label = Label(
+            text="Page 1/1",
+            color=(1, 1, 1, 1),
+            font_size=13,
+            bold=True,
+            size_hint_x=1.2,
         )
-        self.next_button.on_click = self._on_next_page
+        self.next_button = FlatButton("Next", size_hint_x=0.8)
+        self.next_button.bind(on_release=self._on_next_page)
+        row.add_widget(self.prev_button)
+        row.add_widget(self.page_label)
+        row.add_widget(self.next_button)
+        self.add_widget(row)
 
-        # Add buttons directly to UI manager
-        self.ui_manager.add(self.prev_button)
-        self.ui_manager.add(self.next_button)
-
-    def enable(self):
-        """Enable UI interaction."""
-        self.ui_manager.enable()
-
-    def disable(self):
-        """Disable UI interaction."""
-        self.ui_manager.disable()
-
-    def _on_prev_page(self, event):
+    # ------------------------------------------------------------------ paging
+    def _on_prev_page(self, *_):
         """Handle previous page button click."""
         if self.current_page > 0:
             self.current_page -= 1
             self._update_page_from_cache()
 
-    def _on_next_page(self, event):
+    def _on_next_page(self, *_):
         """Handle next page button click."""
         if self.current_page < self.total_pages - 1:
             self.current_page += 1
             self._update_page_from_cache()
 
+    def go_to_page(self, page: int):
+        """Jump to a page (clamped to the valid range)."""
+        self.current_page = max(0, min(int(page), self.total_pages - 1))
+        self._update_page_from_cache()
+
+    def _recompute_pages(self):
+        count = len(self._cached_inventory_data)
+        self.total_pages = max(1, (count + self.items_per_page - 1) // self.items_per_page)
+        self.current_page = max(0, min(self.current_page, self.total_pages - 1))
+        start = self.current_page * self.items_per_page
+        end = min(start + self.items_per_page, count)
+        self._cached_page_entities = self._cached_inventory_data[start:end]
+
     def _update_page_from_cache(self):
         """Update the displayed page entities from cached data."""
-        if not self._cached_inventory_data:
-            return
-
-        # Recalculate which entities to show for current page
-        start_idx = self.current_page * self.items_per_page
-        end_idx = min(start_idx + self.items_per_page, len(self._cached_inventory_data))
-        self._cached_page_entities = self._cached_inventory_data[start_idx:end_idx]
-
-    def on_draw(self):
-        """Draw the inventory panel section."""
-        self.draw_background()
-        self.draw_border(sides="left")
-
-        # Draw cached inventory data
-        self._draw_cached_inventory()
-
-        # Draw UI elements
-        self.ui_manager.draw()
+        self._recompute_pages()
+        self._refresh_page()
+        self.cards_scroll.scroll_y = 1
 
     def render_with_data(self, inventory_data: list[dict]):
-        """Update cached inventory data.
+        """Update the inventory with fresh data from the engine."""
+        self._cached_inventory_data = list(inventory_data or [])
+        self._recompute_pages()
+        self._refresh_page()
 
-        Args:
-            inventory_data: List of entity data dicts from engine
-        """
-        # Cache the new inventory data
-        self._cached_inventory_data = inventory_data
-
-        # Update pagination
-        entity_count = len(inventory_data)
-        self.total_pages = max(
-            1, (entity_count + self.items_per_page - 1) // self.items_per_page
-        )
-        self.current_page = min(self.current_page, self.total_pages - 1)
-
-        # Calculate which entities to show
-        start_idx = self.current_page * self.items_per_page
-        end_idx = min(start_idx + self.items_per_page, entity_count)
-        self._cached_page_entities = inventory_data[start_idx:end_idx]
-
-        # Clean up text cache for entities not on current page
-        current_page_ids = {data["id"] for data in self._cached_page_entities}
-        stale_ids = set(self.entity_text_cache.keys()) - current_page_ids
-        for stale_id in list(stale_ids)[:10]:  # Clean up 10 per frame to avoid lag
-            del self.entity_text_cache[stale_id]
-
-    def _draw_cached_inventory(self):
-        """Draw the cached inventory data."""
-        if not self._cached_inventory_data:
-            return
-
-        # Update page indicator
-        self.page_indicator_text.text = (
-            f"Page {self.current_page + 1}/{self.total_pages}"
-        )
-        self.page_indicator_text.draw()
-
-        # Draw card backgrounds in batch and then overlay text per card
-        entity_start_y = self.region.top - 80
-        y_offset = entity_start_y
-        card_spacing = 15
-
-        # Build/reuse shapes for current page backgrounds
-        key = (
-            self.current_page,
-            len(self._cached_page_entities),
-            self.panel_width,
-            self.panel_x,
-        )
-        if key != self._card_shapes_cache_key:
-            self._card_shapes_cache_key = key
-            shapes = arcade.shape_list.ShapeElementList()
-            y_tmp = y_offset
-            for data in self._cached_page_entities:
-                x = self.panel_x + 15
-                card_width = self.panel_width - 30
-                line_height = 14
-                padding = 12
-                base_lines = 5
-                force_lines = len(data.get("applied_forces", []))
-                card_lines = base_lines + (1 if force_lines > 0 else 0) + force_lines
-                card_height = (card_lines * line_height) + (2 * padding)
-                card_top = y_tmp
-                card_bottom = y_tmp - card_height
-                cx = x + card_width * 0.5
-                cy = (card_top + card_bottom) * 0.5
-                shapes.append(
-                    arcade.shape_list.create_rectangle_filled(
-                        cx,
-                        cy,
-                        float(card_width),
-                        float(card_height),
-                        arcade.uicolor.WHITE_SILVER,
-                    )
-                )
-                shapes.append(
-                    arcade.shape_list.create_rectangle_outline(
-                        cx,
-                        cy,
-                        float(card_width),
-                        float(card_height),
-                        arcade.uicolor.GRAY_ASBESTOS,
-                        2,
-                    )
-                )
-                y_tmp = card_bottom - card_spacing
-            self._card_shapes = shapes
-
-        if self._card_shapes is not None:
-            self._card_shapes.draw()
-
-        # Overlay text content per card
-        for data in self._cached_page_entities:
-            y_offset = self._render_entity_card(data, y_offset)
-            y_offset -= card_spacing
-
-        # Update button states
-        self.prev_button.disabled = self.current_page == 0
+    # ------------------------------------------------------------------ cards
+    def _refresh_page(self):
+        count = len(self._cached_inventory_data)
+        self.summary_label.text = f"Entities: {count}"
+        self.page_label.text = f"Page {self.current_page + 1}/{self.total_pages}"
+        self.prev_button.disabled = self.current_page <= 0
         self.next_button.disabled = self.current_page >= self.total_pages - 1
 
-    def _render_entity_card(self, data: dict, y_offset: float) -> float:
-        """Render a single entity as a card.
+        content = self.cards_scroll.content
+        content.clear_widgets()
+        self.card_widgets = []
+        if not self._cached_page_entities:
+            content.add_widget(
+                TextLabel("No dynamic entities", font_size=12, color=(240, 240, 240))
+            )
+            return
+        start = self.current_page * self.items_per_page
+        for offset, data in enumerate(self._cached_page_entities):
+            card = self._build_card(start + offset + 1, data)
+            self.card_widgets.append(card)
+            content.add_widget(card)
 
-        Args:
-            data: Entity data dict from engine
-            y_offset: Current Y position
+    @staticmethod
+    def _field(label: str, value: str) -> TextLabel:
+        r, g, b, _ = color_to_rgba(LABEL_COLOR)
+        hex_color = "%02x%02x%02x" % (int(r * 255), int(g * 255), int(b * 255))
+        return TextLabel(
+            f"[color={hex_color}]{escape_markup(label)}:[/color] {escape_markup(value)}",
+            font_size=12,
+            markup=True,
+        )
 
-        Returns:
-            Updated Y offset
-        """
-        x = self.panel_x + 15
-        line_height = 14
-        padding = 12
+    def _build_card(self, index: int, data: dict) -> Panel:
+        card = Panel(
+            background_color=CARD_BG,
+            border_color=(200, 200, 200),
+            orientation="vertical",
+            size_hint_y=None,
+            padding=[dp(8), dp(6)],
+            spacing=dp(1),
+        )
+        card.bind(minimum_height=card.setter("height"))
+        card.entity_id = data.get("id")
 
-        entity_id = data["id"]
-        texts = self._get_entity_text_objects(entity_id)
+        card.add_widget(
+            TextLabel(
+                f"#{index} {data.get('type', 'Entity')}",
+                font_size=13,
+                bold=True,
+                color=HEADER_COLOR,
+            )
+        )
+        card.add_widget(self._field("ID", str(data.get("id", ""))[:10]))
+        if "mass" in data:
+            card.add_widget(self._field("Mass", f"{format_number(data['mass'])} kg"))
+        if "radius" in data:
+            card.add_widget(self._field("Radius", f"{format_number(data['radius'])} m"))
+        if "restitution" in data:
+            card.add_widget(self._field("Restitution", format_number(data["restitution"])))
+        if "position" in data:
+            card.add_widget(self._field("Pos", f"{_vec(data['position'])} m"))
+        if "velocity" in data:
+            card.add_widget(self._field("Vel", f"{_vec(data['velocity'])} m/s"))
+        if "speed" in data:
+            card.add_widget(self._field("Speed", f"{format_number(data['speed'])} m/s"))
+        if "acceleration" in data:
+            card.add_widget(self._field("Acc", f"{_vec(data['acceleration'])} m/s²"))
 
-        # Calculate card height
-        base_lines = 5  # Type, ID, Mass, Position, Velocity
-        force_lines = len(data.get("applied_forces", []))
-        card_lines = base_lines + (1 if force_lines > 0 else 0) + force_lines
-        card_height = (card_lines * line_height) + (2 * padding)
-
-        # Card top/bottom used for text layout; background is prebatched
-        card_top = y_offset
-        card_bottom = y_offset - card_height
-
-        # Start rendering content
-        content_y = card_top - padding - 2
-
-        # Entity type header
-        texts["header"].text = f"{data.get('type', 'Entity')}"
-        texts["header"].x = x + padding
-        texts["header"].y = content_y
-        texts["header"].draw()
-        content_y -= line_height
-
-        # ID
-        texts["id_label"].x = x + padding
-        texts["id_label"].y = content_y
-        texts["id_label"].draw()
-        texts["id_value"].text = f"{data['id'][:10]}"
-        texts["id_value"].x = x + 60
-        texts["id_value"].y = content_y
-        texts["id_value"].draw()
-        content_y -= line_height
-
-        # Mass
-        texts["mass_label"].x = x + padding
-        texts["mass_label"].y = content_y
-        texts["mass_label"].draw()
-        texts["mass_value"].text = f"{data['mass']:.2f} kg"
-        texts["mass_value"].x = x + 60
-        texts["mass_value"].y = content_y
-        texts["mass_value"].draw()
-        content_y -= line_height
-
-        # Position
-        texts["pos_label"].x = x + padding
-        texts["pos_label"].y = content_y
-        texts["pos_label"].draw()
-        texts[
-            "pos_value"
-        ].text = f"({data['position'][0]:.1f}, {data['position'][1]:.1f})"
-        texts["pos_value"].x = x + 60
-        texts["pos_value"].y = content_y
-        texts["pos_value"].draw()
-        content_y -= line_height
-
-        texts["acc_label"].x = x + padding
-        texts["acc_label"].y = content_y
-        texts["acc_label"].draw()
-        texts[
-            "acc_value"
-        ].text = f"({data['acceleration'][0]:.1f}, {data['acceleration'][1]:.1f})"
-        texts["acc_value"].x = x + 60
-        texts["acc_value"].y = content_y
-        texts["acc_value"].draw()
-        content_y -= line_height
-
-        # Velocity & Speed
-        texts["vel_label"].x = x + padding
-        texts["vel_label"].y = content_y
-        texts["vel_label"].draw()
-        vel_text = f"({data['velocity'][0]:.1f}, {data['velocity'][1]:.1f}) [{data['speed']:.1f} m/s]"
-        texts["vel_value"].text = vel_text
-        texts["vel_value"].x = x + 60
-        texts["vel_value"].y = content_y
-        texts["vel_value"].draw()
-        content_y -= line_height
-
-        # Forces
         forces = data.get("applied_forces", [])
         if forces:
-            texts["forces_header"].x = x + padding
-            texts["forces_header"].y = content_y
-            texts["forces_header"].draw()
-            content_y -= line_height
-
-            # Ensure we have enough force text objects
-            while len(texts["force_texts"]) < len(forces):
-                texts["force_texts"].append(
-                    arcade.Text("", 0, 0, arcade.color.DARK_CYAN, 8)
+            card.add_widget(TextLabel("Forces:", font_size=12, bold=True, color=FORCE_COLOR))
+            for force in forces:
+                card.add_widget(
+                    TextLabel(
+                        f"  • {force.get('name', '?')}: "
+                        f"{format_number(force.get('magnitude', 0.0))} N "
+                        f"{_vec(force.get('vector', (0.0, 0.0)))}",
+                        font_size=11,
+                        color=MUTED_TEXT_COLOR,
+                    )
                 )
-
-            for i, force_data in enumerate(forces):
-                force_text = f"• {force_data['name']}: {force_data['magnitude']:.1f} N"
-                texts["force_texts"][i].text = force_text
-                texts["force_texts"][i].x = x + padding + 10
-                texts["force_texts"][i].y = content_y
-                texts["force_texts"][i].draw()
-                content_y -= line_height
-
-        return card_bottom
-
-    def _get_entity_text_objects(self, entity_id: str):
-        """Get or create text objects for an entity."""
-        if entity_id not in self.entity_text_cache:
-            self.entity_text_cache[entity_id] = {
-                "header": arcade.Text(
-                    "", 0, 0, arcade.uicolor.BLUE_PETER_RIVER, 11, bold=True
-                ),
-                "id_label": arcade.Text("ID:", 5, 0, arcade.color.DARK_CYAN, 9),
-                "id_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
-                "mass_label": arcade.Text("Mass:", 5, 0, arcade.color.DARK_CYAN, 9),
-                "mass_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
-                "pos_label": arcade.Text("Pos:", 5, 0, arcade.color.DARK_CYAN, 9),
-                "pos_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
-                "acc_label": arcade.Text("Acc:", 5, 0, arcade.color.DARK_CYAN, 9),
-                "acc_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
-                "vel_label": arcade.Text("Vel:", 5, 0, arcade.color.DARK_CYAN, 9),
-                "vel_value": arcade.Text("", 0, 0, arcade.color.BLACK, 9),
-                "forces_header": arcade.Text(
-                    "Forces:", 0, 0, arcade.uicolor.RED_ALIZARIN, 9, bold=True
-                ),
-                "force_texts": [],
-            }
-        return self.entity_text_cache[entity_id]
+        return card
 
     def on_mouse_scroll(self, x: int, y: int, scroll_x: int, scroll_y: int):
-        """Handle mouse scroll - no-op now that we use pagination."""
+        """Mouse wheel scrolling is handled by the cards ScrollView."""
         pass
 
-    def on_update(self, delta_time: float):
-        """Update section."""
+    def on_draw(self):
+        """Kept for API compatibility (Kivy widgets draw themselves)."""
         pass
 
 

@@ -1,46 +1,69 @@
-import arcade
+from kivy.uix.stencilview import StencilView
 
 from physics_sim.core import Force, LayoutRegion
-from physics_sim.rendering import ArcadeRenderer
-from physics_sim.ui.sections.base_section import BaseSection
+from physics_sim.rendering import KivyRenderer
 
 
-class ViewportSection(BaseSection):
-    """Central viewport section for rendering the physics simulation."""
+class ViewportSection(StencilView):
+    """Central viewport rendering the physics simulation.
 
-    def __init__(self, region: LayoutRegion, sim_width: float, sim_height: float):
-        super().__init__(
-            region,
-            background_color=arcade.color.PLATINUM,
-            border_color=None,
-        )
+    A ``StencilView`` clips all drawing to the viewport so entities that move
+    outside never paint over the neighbouring panels.
+    """
 
-        self.renderer = ArcadeRenderer(
-            region=region,
+    def __init__(
+        self,
+        region: LayoutRegion | None = None,
+        sim_width: float = 20.0,
+        sim_height: float = 10.0,
+        **kwargs,
+    ):
+        super().__init__(**kwargs)
+        region = region or LayoutRegion(0, 0, 100, 100)
+        if region.width > 0 and region.height > 0:
+            self.pos = (region.x, region.y)
+            self.size = (region.width, region.height)
+
+        self.renderer = KivyRenderer(
+            region=LayoutRegion(int(self.x), int(self.y), int(self.width), int(self.height)),
             sim_width=sim_width,
             sim_height=sim_height,
         )
+        self.canvas.add(self.renderer.instructions)
+
+        # Callback: on_click(x, y, button) with coordinates in widget space
+        self.on_click = None
+        self.bind(pos=self._on_geometry, size=self._on_geometry)
+
+    @property
+    def region(self) -> LayoutRegion:
+        return self.renderer.region
+
+    def _on_geometry(self, *_):
+        self.renderer.set_region(self.x, self.y, self.width, self.height)
+
+    def on_touch_down(self, touch):
+        if not self.collide_point(*touch.pos):
+            return super().on_touch_down(touch)
+        button = getattr(touch, "button", "left") or "left"
+        if button.startswith("scroll"):
+            return super().on_touch_down(touch)
+        if self.on_click:
+            self.on_click(touch.x, touch.y, button)
+        return True
 
     def on_draw(self):
-        """Draw the viewport section."""
-        self.draw_background()
-        # Renderer handles grid and entities
+        """Kept for API compatibility; rendering happens via render_with_data."""
+        pass
 
     def render_with_data(
         self, render_data: list[dict], forces: list[Force] | None = None
     ):
-        """Render simulation entities from data dicts.
-
-        This is called from Simulator during on_draw.
-
-        Args:
-            render_data: List of entity data dicts from engine
-        """
+        """Render grid and simulation entities from engine data dicts."""
         self.renderer.render_grid()
         self.renderer.render_entities(render_data)
 
     def on_update(self, delta_time: float):
-        """Update section."""
         pass
 
 

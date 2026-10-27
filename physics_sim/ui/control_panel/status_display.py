@@ -1,28 +1,29 @@
-import arcade.gui
+from physics_sim.ui.utils import format_number
+from physics_sim.ui.widgets import MUTED_TEXT_COLOR, TextLabel, vbox
 
 
 class StatusDisplay:
     """Widget for displaying current application status and debug info."""
 
     def __init__(self):
-        self.layout = arcade.gui.UIBoxLayout(space_between=8, vertical=True)
+        self.layout = vbox(spacing=2)
         self._current_fps = 0.0
-        self._entity_counts = {}
+        self._entity_counts: dict[str, int] = {}
         self._build()
 
     def _build(self):
         """Build widget layout."""
-        # Debug info labels
-        self.fps_label = arcade.gui.UILabel(
-            text="FPS: 0",
-            font_size=9,
-            text_color=arcade.color.BLACK_LEATHER_JACKET,
+        self.layout.add_widget(TextLabel("Status", font_size=13, bold=True))
+        self.fps_label = TextLabel("FPS: 0.00", font_size=12)
+        self.layout.add_widget(self.fps_label)
+        self.mode_label = TextLabel("Mode: Running", font_size=12)
+        self.layout.add_widget(self.mode_label)
+        self.counts_label = TextLabel(
+            "No entities", font_size=12, color=MUTED_TEXT_COLOR
         )
-        self.layout.add(self.fps_label)
-
-        # Entity counts - will be dynamically created
-        self.entity_count_labels = {}
-
+        self.layout.add_widget(self.counts_label)
+        # Kept for API compatibility (type name -> text)
+        self.entity_count_labels: dict[str, str] = {}
 
     def update_debug_info(self, fps: float, entity_counts: dict[str, int]):
         """Update debug information.
@@ -31,46 +32,36 @@ class StatusDisplay:
             fps: Current frames per second
             entity_counts: Dictionary mapping entity type names to counts
         """
-        self.fps_label.text = f"FPS: {fps:.0f}"
+        self._current_fps = fps
+        fps_text = f"FPS: {format_number(fps)}"
+        if self.fps_label.text != fps_text:
+            self.fps_label.text = fps_text
 
-        # Remove old entity count labels that no longer exist
-        for type_name in list(self.entity_count_labels.keys()):
-            if type_name != "no_entities" and type_name not in entity_counts:
-                label = self.entity_count_labels.pop(type_name)
-                self.layout.remove(label)
-
-        # Update or create labels for each entity type
-        if entity_counts:
-            # Remove "no_entities" placeholder if it exists
-            if "no_entities" in self.entity_count_labels:
-                label = self.entity_count_labels.pop("no_entities")
-                self.layout.remove(label)
-
-            for type_name, count in entity_counts.items():
-                if type_name not in self.entity_count_labels:
-                    # Create new label
-                    label = arcade.gui.UILabel(
-                        text=f"{type_name}: {count}",
-                        font_size=9,
-                        text_color=arcade.color.BLACK_LEATHER_JACKET,
-                    )
-                    self.entity_count_labels[type_name] = label
-                    self.layout.add(label)
-                else:
-                    # Update existing label
-                    self.entity_count_labels[type_name].text = f"{type_name}: {count}"
+        counts = dict(entity_counts or {})
+        if counts == self._entity_counts and self.entity_count_labels:
+            return
+        self._entity_counts = counts
+        if counts:
+            self.entity_count_labels = {
+                name: f"{name}: {count}" for name, count in counts.items()
+            }
+            self.counts_label.text = "\n".join(self.entity_count_labels.values())
         else:
-            # Show "No entities" if nothing exists
-            if "no_entities" not in self.entity_count_labels:
-                label = arcade.gui.UILabel(
-                    text="No entities",
-                    font_size=9,
-                    text_color=arcade.color.DARK_GRAY,
-                )
-                self.entity_count_labels["no_entities"] = label
-                self.layout.add(label)
+            self.entity_count_labels = {"no_entities": "No entities"}
+            self.counts_label.text = "No entities"
 
-    def get_layout(self) -> arcade.gui.UIBoxLayout:
+    def set_mode(self, add_mode: bool, paused: bool):
+        """Display current interaction mode."""
+        if add_mode:
+            text = "Mode: Add (click viewport to place)"
+        elif paused:
+            text = "Mode: Edit (click entity to select)"
+        else:
+            text = "Mode: Running"
+        if self.mode_label.text != text:
+            self.mode_label.text = text
+
+    def get_layout(self):
         """Get the widget layout."""
         return self.layout
 

@@ -4,7 +4,6 @@ version = "0.1.0"
 description = "Modular physics simulation framework with pluggable engines"
 requires-python = ">=3.13.7, <3.14"
 dependencies = [
-    "arcade>=3.3.3",
     "base-conversion-kit>=1.0.7",
     "ffmpeg>=1.4",
     "ipykernel>=7.0.1",

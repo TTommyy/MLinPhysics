@@ -1,404 +1,186 @@
-import arcade
+from kivy.graphics import Color, InstructionGroup, Line, Rectangle
+from kivy.metrics import dp
+from kivy.uix.widget import Widget
 
 from physics_sim.core import LayoutRegion
+from physics_sim.rendering._text_cache import TextTextureCache
 from physics_sim.ui.sections.base_section import BaseSection
+from physics_sim.ui.utils import color_to_rgba, format_number
+from physics_sim.ui.widgets import TextLabel, hbox
+
+KE_COLOR = (41, 128, 185)  # peter river
+PE_COLOR = (192, 57, 43)  # pomegranate
+TOTAL_COLOR = (39, 174, 96)  # nephritis
+GRID_COLOR = (200, 200, 200)
+AXIS_COLOR = (128, 128, 128)
+TEXT_COLOR = (20, 20, 20)
+
+
+class EnergyPlot(Widget):
+    """Line plot of kinetic / potential / total energy over time."""
+
+    margin_left = dp(64)
+    margin_right = dp(14)
+    margin_top = dp(18)
+    margin_bottom = dp(32)
+    num_h_lines = 5
+    num_v_lines = 6
+
+    def __init__(self, section: "EnergyManagerSection", **kwargs):
+        super().__init__(**kwargs)
+        self.section = section
+        self._text_cache = TextTextureCache()
+        self._group = InstructionGroup()
+        self.canvas.add(self._group)
+        self.bind(pos=self.redraw, size=self.redraw)
+
+    def plot_bounds(self) -> tuple[float, float, float, float]:
+        left = self.x + self.margin_left
+        right = self.right - self.margin_right
+        bottom = self.y + self.margin_bottom
+        top = self.top - self.margin_top
+        return left, right, bottom, top
+
+    def _text(self, text: str, x: float, y: float, anchor_x="left", anchor_y="bottom", size=11, bold=False):
+        texture = self._text_cache.get(text, size, color_to_rgba(TEXT_COLOR), bold)
+        w, h = texture.size
+        if anchor_x == "center":
+            x -= w / 2
+        elif anchor_x == "right":
+            x -= w
+        if anchor_y == "center":
+            y -= h / 2
+        elif anchor_y == "top":
+            y -= h
+        self._group.add(Color(1, 1, 1, 1))
+        self._group.add(Rectangle(texture=texture, size=texture.size, pos=(x, y)))
+
+    def redraw(self, *_):
+        g = self._group
+        g.clear()
+        left, right, bottom, top = self.plot_bounds()
+        width, height = right - left, top - bottom
+        if width <= 10 or height <= 10:
+            return
+
+        s = self.section
+        times = s.time_history
+        series = [
+            (s.kinetic_history, KE_COLOR),
+            (s.potential_history, PE_COLOR),
+            (s.total_history, TOTAL_COLOR),
+        ]
+
+        # Plot background, grid and border
+        g.add(Color(1, 1, 1, 1))
+        g.add(Rectangle(pos=(left, bottom), size=(width, height)))
+        g.add(Color(*color_to_rgba(GRID_COLOR)))
+        for i in range(self.num_h_lines + 1):
+            y = bottom + height * i / self.num_h_lines
+            g.add(Line(points=[left, y, right, y], width=1))
+        for i in range(self.num_v_lines + 1):
+            x = left + width * i / self.num_v_lines
+            g.add(Line(points=[x, bottom, x, top], width=1))
+        g.add(Color(*color_to_rgba(AXIS_COLOR)))
+        g.add(Line(rectangle=(left, bottom, width, height), width=1.2))
+
+        # Axis titles
+        self._text("Energy (J)", self.x + dp(4), top + dp(2), size=11, bold=True)
+        self._text("Time (s)", right, self.y + dp(2), anchor_x="right", size=11, bold=True)
+
+        if len(times) < 2:
+            self._text(
+                "Waiting for data (simulation must be running)...",
+                left + width / 2, bottom + height / 2, anchor_x="center", anchor_y="center",
+            )
+            return
+
+        t_min, t_max = min(times), max(times)
+        t_range = t_max - t_min if t_max > t_min else 1.0
+        all_e = s.kinetic_history + s.potential_history + s.total_history
+        e_min, e_max = min(all_e), max(all_e)
+        e_range = e_max - e_min if e_max > e_min else 1.0
+        pad = e_range * 0.1
+        e_min -= pad
+        e_max += pad
+        e_range = e_max - e_min
+
+        for i in range(self.num_h_lines + 1):
+            y = bottom + height * i / self.num_h_lines
+            value = e_min + e_range * i / self.num_h_lines
+            self._text(format_number(value), left - dp(4), y, anchor_x="right", anchor_y="center", size=10)
+        for i in range(0, self.num_v_lines + 1, 2):
+            x = left + width * i / self.num_v_lines
+            value = t_min + t_range * i / self.num_v_lines
+            self._text(format_number(value), x, bottom - dp(2), anchor_x="center", anchor_y="top", size=10)
+
+        for values, color in series:
+            pts: list[float] = []
+            for t, e in zip(times, values):
+                pts.append(left + (t - t_min) / t_range * width)
+                pts.append(bottom + (e - e_min) / e_range * height)
+            g.add(Color(*color_to_rgba(color)))
+            g.add(Line(points=pts, width=1.3))
 
 
 class EnergyManagerSection(BaseSection):
-    """Bottom panel section displaying energy plots."""
+    """Bottom panel displaying kinetic/potential/total energy over time."""
 
-    def __init__(self, region: LayoutRegion, max_history: int = 300):
-        super().__init__(
-            region,
-            background_color=(240, 240, 250),
-            border_color=arcade.color.GRAY,
-        )
-
+    def __init__(self, region: LayoutRegion | None = None, max_history: int = 300, **kwargs):
+        super().__init__(region, background_color=(240, 240, 250), **kwargs)
+        self.orientation = "vertical"
+        self.padding = [dp(8), dp(6)]
+        self.spacing = dp(4)
         self.max_history = max_history
 
-        # Energy history
         self.kinetic_history: list[float] = []
         self.potential_history: list[float] = []
         self.total_history: list[float] = []
         self.time_history: list[float] = []
 
-        # Plot area (with margins)
-        self.plot_margin_left = 60
-        self.plot_margin_right = 30
-        self.plot_margin_top = 40
-        self.plot_margin_bottom = 40
-
-        # Text objects
-        self._create_text_objects()
-
-        # Cached shapes for static elements
-        self._plot_cache_key = None
-        self._plot_shapes_static = None  # border + grid lines
-
-        # Cached shapes for dynamic series
-        self._series_cache_key = None
-        self._series_shape_ke = None
-        self._series_shape_pe = None
-        self._series_shape_total = None
-
-    def _create_text_objects(self):
-        """Create reusable text objects."""
-        x = self.region.x + 15
-        y = self.region.top - 20
-
-        self.title_text = arcade.Text(
-            "ENERGY TRACKING",
-            x,
-            y,
-            arcade.color.DARK_BLUE,
-            14,
-            bold=True,
+        header = hbox(spacing=10, height=dp(24))
+        header.add_widget(
+            TextLabel("ENERGY TRACKING", font_size=16, bold=True, color=(0, 0, 139), size_hint_x=1.3)
         )
+        self.ke_legend_label = TextLabel("KE: 0.00 J", font_size=13, bold=True, color=KE_COLOR)
+        self.pe_legend_label = TextLabel("PE: 0.00 J", font_size=13, bold=True, color=PE_COLOR)
+        self.total_legend_label = TextLabel(
+            "Total: 0.00 J", font_size=13, bold=True, color=TOTAL_COLOR
+        )
+        for lbl in (self.ke_legend_label, self.pe_legend_label, self.total_legend_label):
+            header.add_widget(lbl)
+        self.add_widget(header)
 
-        # Legend texts (will be positioned dynamically)
-        self.ke_legend_text = arcade.Text(
-            "",
-            0,
-            0,
-            arcade.uicolor.BLUE_PETER_RIVER,
-            10,
-            bold=True,
-        )
-        self.pe_legend_text = arcade.Text(
-            "",
-            0,
-            0,
-            arcade.uicolor.RED_POMEGRANATE,
-            10,
-            bold=True,
-        )
-        self.total_legend_text = arcade.Text(
-            "",
-            0,
-            0,
-            arcade.uicolor.GREEN_NEPHRITIS,
-            10,
-            bold=True,
-        )
-
-        # Axis labels
-        self.x_axis_label = arcade.Text(
-            "Time (s)",
-            self.region.center_x,
-            self.region.bottom + 15,
-            arcade.color.BLACK,
-            9,
-            anchor_x="center",
-        )
-        self.y_axis_label = arcade.Text(
-            "Energy (J)",
-            self.region.x + 20,
-            self.region.center_y,
-            arcade.color.BLACK,
-            9,
-            anchor_x="center",
-            rotation=90,
-        )
+        self.plot = EnergyPlot(self)
+        self.add_widget(self.plot)
 
     def add_energy_sample(self, ke: float, pe: float, total: float, time: float):
-        """Add an energy sample to history.
+        """Add an energy sample to history (and refresh plot + legend)."""
+        self.kinetic_history.append(float(ke))
+        self.potential_history.append(float(pe))
+        self.total_history.append(float(total))
+        self.time_history.append(float(time))
 
-        Args:
-            ke: Kinetic energy in Joules
-            pe: Potential energy in Joules
-            total: Total energy in Joules
-            time: Simulation time in seconds
-        """
-        self.kinetic_history.append(ke)
-        self.potential_history.append(pe)
-        self.total_history.append(total)
-        self.time_history.append(time)
-
-        # Limit history size
         if len(self.time_history) > self.max_history:
-            self.kinetic_history.pop(0)
-            self.potential_history.pop(0)
-            self.total_history.pop(0)
-            self.time_history.pop(0)
+            del self.kinetic_history[0]
+            del self.potential_history[0]
+            del self.total_history[0]
+            del self.time_history[0]
+
+        self.ke_legend_label.text = f"KE: {format_number(ke)} J"
+        self.pe_legend_label.text = f"PE: {format_number(pe)} J"
+        self.total_legend_label.text = f"Total: {format_number(total)} J"
+        self.plot.redraw()
+
+    def clear_history(self):
+        self.kinetic_history.clear()
+        self.potential_history.clear()
+        self.total_history.clear()
+        self.time_history.clear()
+        self.plot.redraw()
 
     def on_draw(self):
-        """Draw the energy manager section."""
-        self.draw_background()
-        self.draw_border()
-
-        # Draw title
-        self.title_text.draw()
-
-        # Draw plot if we have data
-        if len(self.time_history) >= 2:
-            self._render_energy_plot()
-
-        # Draw axis labels
-        self.x_axis_label.draw()
-        self.y_axis_label.draw()
-
-    def _render_energy_plot(self):
-        """Render the energy plot with grid and legend."""
-        if len(self.time_history) < 2:
-            return
-
-        # Calculate plot bounds
-        plot_left = self.region.left + self.plot_margin_left
-        plot_right = self.region.right - self.plot_margin_right
-        plot_bottom = self.region.bottom + self.plot_margin_bottom
-        plot_top = self.region.top - self.plot_margin_top
-
-        plot_width = plot_right - plot_left
-        plot_height = plot_top - plot_bottom
-
-        if plot_width <= 0 or plot_height <= 0:
-            return
-
-        # Build/reuse static plot shapes (border + grid)
-        key_static = (plot_left, plot_right, plot_bottom, plot_top)
-        if key_static != self._plot_cache_key:
-            self._plot_cache_key = key_static
-            shapes = arcade.shape_list.ShapeElementList()
-            # Border
-            shapes.append(
-                arcade.shape_list.create_rectangle_outline(
-                    (plot_left + plot_right) * 0.5,
-                    (plot_bottom + plot_top) * 0.5,
-                    float(plot_right - plot_left),
-                    float(plot_top - plot_bottom),
-                    arcade.color.GRAY,
-                    2,
-                )
-            )
-            # Horizontal grid
-            num_h_lines = 5
-            h_points: list[tuple[float, float]] = []
-            h_colors: list[tuple[int, int, int, int]] = []
-            for i in range(num_h_lines + 1):
-                y = plot_bottom + (plot_height * i / num_h_lines)
-                h_points.extend([(plot_left, y), (plot_right, y)])
-                h_colors.extend([(200, 200, 200, 255), (200, 200, 200, 255)])
-            if h_points:
-                shapes.append(
-                    arcade.shape_list.create_lines_with_colors(h_points, h_colors, 1)
-                )
-            # Vertical grid
-            num_v_lines = 6
-            v_points: list[tuple[float, float]] = []
-            v_colors: list[tuple[int, int, int, int]] = []
-            for i in range(num_v_lines + 1):
-                x = plot_left + (plot_width * i / num_v_lines)
-                v_points.extend([(x, plot_bottom), (x, plot_top)])
-                v_colors.extend([(200, 200, 200, 255), (200, 200, 200, 255)])
-            if v_points:
-                shapes.append(
-                    arcade.shape_list.create_lines_with_colors(v_points, v_colors, 1)
-                )
-            self._plot_shapes_static = shapes
-
-        if self._plot_shapes_static is not None:
-            self._plot_shapes_static.draw()
-
-        # Calculate data ranges
-        time_min = min(self.time_history)
-        time_max = max(self.time_history)
-        time_range = time_max - time_min if time_max > time_min else 1.0
-
-        # Find energy range (with some padding)
-        all_energies = (
-            self.kinetic_history + self.potential_history + self.total_history
-        )
-        energy_min = min(all_energies)
-        energy_max = max(all_energies)
-        energy_range = energy_max - energy_min if energy_max > energy_min else 1.0
-        energy_padding = energy_range * 0.1
-        energy_min -= energy_padding
-        energy_max += energy_padding
-        energy_range = energy_max - energy_min
-
-        # Y-axis labels (text objects only)
-        num_h_lines = 5
-        for i in range(num_h_lines + 1):
-            y = plot_bottom + (plot_height * i / num_h_lines)
-            energy_value = energy_min + (energy_range * i / num_h_lines)
-            arcade.Text(
-                f"{energy_value:.1f}",
-                plot_left - 5,
-                y - 5,
-                arcade.color.BLACK,
-                8,
-                anchor_x="right",
-            ).draw()
-
-        # X-axis labels (text objects only)
-        num_v_lines = 6
-        for i in range(num_v_lines + 1):
-            x = plot_left + (plot_width * i / num_v_lines)
-            if i % 2 == 0:
-                time_value = time_min + (time_range * i / num_v_lines)
-                arcade.Text(
-                    f"{time_value:.1f}",
-                    x,
-                    plot_bottom - 15,
-                    arcade.color.BLACK,
-                    8,
-                    anchor_x="center",
-                ).draw()
-
-        # Helper function to convert data to screen coordinates
-        def to_screen_coords(time_val: float, energy_val: float) -> tuple[float, float]:
-            x = plot_left + ((time_val - time_min) / time_range) * plot_width
-            y = plot_bottom + ((energy_val - energy_min) / energy_range) * plot_height
-            return x, y
-
-        # Build/reuse dynamic series shapes (recreate if vertex count changed)
-        def build_series(
-            points_color: tuple[int, int, int, int],
-            times: list[float],
-            vals: list[float],
-        ):
-            pts: list[tuple[float, float]] = []
-            cols: list[tuple[int, int, int, int]] = []
-            for i in range(len(times) - 1):
-                x1, y1 = to_screen_coords(times[i], vals[i])
-                x2, y2 = to_screen_coords(times[i + 1], vals[i + 1])
-                pts.extend([(x1, y1), (x2, y2)])
-                cols.extend([points_color, points_color])
-            return pts, cols
-
-        key_series = (len(self.time_history),)
-        if key_series != self._series_cache_key:
-            self._series_cache_key = key_series
-
-            def _rgba(color_like: tuple | list) -> tuple[int, int, int, int]:
-                vals = tuple(color_like)
-                if len(vals) == 3:
-                    return (int(vals[0]), int(vals[1]), int(vals[2]), 255)
-                if len(vals) == 4:
-                    return (int(vals[0]), int(vals[1]), int(vals[2]), int(vals[3]))
-                # Fallback to black
-                return (0, 0, 0, 255)
-
-            blue = _rgba(arcade.uicolor.BLUE_PETER_RIVER)
-            red = _rgba(arcade.uicolor.RED_POMEGRANATE)
-            green = _rgba(arcade.uicolor.GREEN_NEPHRITIS)
-
-            ke_pts, ke_cols = build_series(
-                blue, self.time_history, self.kinetic_history
-            )
-            pe_pts, pe_cols = build_series(
-                red, self.time_history, self.potential_history
-            )
-            tot_pts, tot_cols = build_series(
-                green, self.time_history, self.total_history
-            )
-
-            self._series_shape_ke = (
-                arcade.shape_list.create_lines_with_colors(ke_pts, ke_cols, 1)
-                if ke_pts
-                else None
-            )
-            self._series_shape_pe = (
-                arcade.shape_list.create_lines_with_colors(pe_pts, pe_cols, 1)
-                if pe_pts
-                else None
-            )
-            self._series_shape_total = (
-                arcade.shape_list.create_lines_with_colors(tot_pts, tot_cols, 1)
-                if tot_pts
-                else None
-            )
-        else:
-            # Update data in-place
-            def update_shape(shape, times: list[float], vals: list[float]):
-                if shape is None:
-                    return
-                data: list[float] = []
-                for i in range(len(times) - 1):
-                    x1, y1 = to_screen_coords(times[i], vals[i])
-                    x2, y2 = to_screen_coords(times[i + 1], vals[i + 1])
-                    cr, cg, cb, ca = shape.colors[0]
-                    data.extend([x1, y1, cr, cg, cb, ca, x2, y2, cr, cg, cb, ca])
-                from array import array as _array
-
-                shape.data = _array("f", data)
-                if shape.geometry is not None:
-                    shape.buffer.write(shape.data)
-
-            update_shape(self._series_shape_ke, self.time_history, self.kinetic_history)
-            update_shape(
-                self._series_shape_pe, self.time_history, self.potential_history
-            )
-            update_shape(
-                self._series_shape_total, self.time_history, self.total_history
-            )
-
-        if self._series_shape_ke:
-            self._series_shape_ke.draw()
-        if self._series_shape_pe:
-            self._series_shape_pe.draw()
-        if self._series_shape_total:
-            self._series_shape_total.draw()
-
-        # Draw legend
-        self._draw_legend(plot_right, plot_top)
-
-    def _draw_energy_line(
-        self,
-        time_data: list[float],
-        energy_data: list[float],
-        to_screen_coords,
-        color: tuple[int, int, int],
-        width: int,
-    ):
-        """Draw a single energy line on the plot."""
-        for i in range(len(time_data) - 1):
-            x1, y1 = to_screen_coords(time_data[i], energy_data[i])
-            x2, y2 = to_screen_coords(time_data[i + 1], energy_data[i + 1])
-            arcade.draw_line(x1, y1, x2, y2, color, width)
-
-    def _draw_legend(self, plot_right: float, plot_top: float):
-        """Draw the legend with current values."""
-        legend_x = plot_right - 150
-        legend_y = plot_top - 10
-
-        if not self.kinetic_history:
-            return
-
-        # Get current values
-        ke_current = self.kinetic_history[-1]
-        pe_current = self.potential_history[-1]
-        total_current = self.total_history[-1]
-
-        # Update legend texts
-        self.ke_legend_text.text = f"KE: {ke_current:.2f} J"
-        self.ke_legend_text.x = legend_x
-        self.ke_legend_text.y = legend_y
-
-        self.pe_legend_text.text = f"PE: {pe_current:.2f} J"
-        self.pe_legend_text.x = legend_x
-        self.pe_legend_text.y = legend_y - 15
-
-        self.total_legend_text.text = f"Total: {total_current:.2f} J"
-        self.total_legend_text.x = legend_x
-        self.total_legend_text.y = legend_y - 30
-
-        # Draw legend background
-        arcade.draw_lrbt_rectangle_filled(
-            legend_x - 5,
-            legend_x + 145,
-            legend_y - 40,
-            legend_y + 10,
-            (255, 255, 255, 200),
-        )
-
-        # Draw legend texts
-        self.ke_legend_text.draw()
-        self.pe_legend_text.draw()
-        self.total_legend_text.draw()
-
-    def on_update(self, delta_time: float):
-        """Update section."""
+        """Kept for API compatibility (Kivy widgets draw themselves)."""
         pass
 
 

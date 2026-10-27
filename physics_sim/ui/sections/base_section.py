@@ -1,87 +1,55 @@
-import arcade
-
 from physics_sim.core import LayoutRegion
+from physics_sim.ui.widgets import Panel
 
 
-class BaseSection(arcade.Section):
-    """Base section providing common rendering utilities for UI panels."""
+class BaseSection(Panel):
+    """Base section: a Kivy panel (BoxLayout) with background and border.
+
+    Sections are laid out by their parent layout; ``region`` reflects the
+    current on-screen rectangle of the section.
+    """
 
     def __init__(
         self,
-        region: LayoutRegion,
+        region: LayoutRegion | None = None,
         background_color: tuple[int, int, int] = (245, 245, 245),
-        border_color: tuple[int, int, int] | None = arcade.color.GRAY,
-        border_width: int = 2,
+        border_color: tuple[int, int, int] | None = (160, 160, 160),
+        border_width: float = 1.0,
+        **kwargs,
     ):
+        kwargs.setdefault("orientation", "vertical")
         super().__init__(
-            left=region.left,
-            bottom=region.bottom,
-            width=region.width,
-            height=region.height,
+            background_color=background_color,
+            border_color=border_color,
+            border_width=border_width,
+            **kwargs,
         )
-        self.region = region
         self.background_color = background_color
         self.border_color = border_color
         self.border_width = border_width
+        self._initial_region = region
+        if region is not None and region.width > 0 and region.height > 0:
+            self.pos = (region.x, region.y)
+            self.size = (region.width, region.height)
 
-    def draw_background(self):
-        """Draw section background."""
-        arcade.draw_lrbt_rectangle_filled(
-            self.region.left,
-            self.region.right,
-            self.region.bottom,
-            self.region.top,
-            self.background_color,
+    @property
+    def region(self) -> LayoutRegion:
+        """Current on-screen region of the section."""
+        return LayoutRegion(
+            int(self.x), int(self.y), int(self.width), int(self.height)
         )
 
-    def draw_border(self, sides: str = "all"):
-        """Draw section border.
+    def enable(self):
+        """Enable user interaction."""
+        self.disabled = False
 
-        Args:
-            sides: Which sides to draw ('all', 'left', 'right', 'top', 'bottom')
-        """
-        if not self.border_color:
-            return
+    def disable(self):
+        """Disable user interaction."""
+        self.disabled = True
 
-        if sides in ("all", "left"):
-            arcade.draw_line(
-                self.region.left,
-                self.region.bottom,
-                self.region.left,
-                self.region.top,
-                self.border_color,
-                self.border_width,
-            )
-
-        if sides in ("all", "right"):
-            arcade.draw_line(
-                self.region.right,
-                self.region.bottom,
-                self.region.right,
-                self.region.top,
-                self.border_color,
-                self.border_width,
-            )
-
-        if sides in ("all", "top"):
-            arcade.draw_line(
-                self.region.left,
-                self.region.top,
-                self.region.right,
-                self.region.top,
-                self.border_color,
-                self.border_width,
-            )
-
-        if sides in ("all", "bottom"):
-            arcade.draw_line(
-                self.region.left,
-                self.region.bottom,
-                self.region.right,
-                self.region.bottom,
-                self.border_color,
-                self.border_width,
-            )
+    def on_update(self, delta_time: float):
+        """Per-frame update hook."""
+        pass
 
 
 __all__: list[str] = ["BaseSection"]

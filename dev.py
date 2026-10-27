@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Hot-reload development runner for Arcade simulation.
+"""Hot-reload development runner for the Kivy simulation.
 
 Watches physics_sim modules for changes and automatically restarts the window.
 """

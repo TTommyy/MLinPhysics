@@ -4,13 +4,12 @@
 
 import logging
 
-import arcade
-
 from physics_sim import (
     NumpyPhysicsEngine,
     SimulationConfig,
     Simulator,
 )
+from physics_sim.ui.utils import get_display_size
 
 # Configure logging
 logging.basicConfig(
@@ -22,9 +21,7 @@ logging.basicConfig(
 
 def main():
     # Create configuration
-    config = SimulationConfig.from_screen_size(
-        arcade.get_display_size()[0], arcade.get_display_size()[1]
-    )
+    config = SimulationConfig.from_screen_size(*get_display_size())
 
     # Create engine
     engine = NumpyPhysicsEngine(

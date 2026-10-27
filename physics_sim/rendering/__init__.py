@@ -1,3 +1,3 @@
-__all__: list[str] = ["ArcadeRenderer"]
+__all__: list[str] = ["KivyRenderer"]
 
-from .arcade_renderer import ArcadeRenderer
+from .kivy_renderer import KivyRenderer
